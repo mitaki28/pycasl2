@@ -376,6 +376,12 @@ def cpa1(machine, r1, r2):
     return int(diff == 0), int(diff < 0), 0
 
 
+@instruction(0x45, 'CPL', r1r2)
+def cpl1(machine, r1, r2):
+    diff = machine.GR[r1] - machine.GR[r2]
+    return int(diff == 0), int(diff < 0), 0
+
+
 @instruction(0x50, 'SLA', radrx)
 def sla(machine, r, adr, x):
     v = get_effective_address(machine, adr, x)
@@ -551,6 +557,7 @@ class pyComet2:
     class InvalidOperation(BaseException):
         def __init__(self, address):
             self.address = address
+
         def __str__(self):
             return 'Invalid operation is found at #%04x.' % self.address
 
@@ -588,9 +595,9 @@ class pyComet2:
                     if int(s[2]) < 0 or 8 < int(s[2]):
                         raise
                     if self.decimalFlag:
-                        self.format += s[0:3] +"=%d"
+                        self.format += s[0:3] + "=%d"
                     else:
-                        self.format += s[0:3] +"=#%04x"
+                        self.format += s[0:3] + "=#%04x"
                     self.var_list.append('self.m.GR[' + s[2] + ']')
                 else:
                     adr = self.m.cast_int(s)
@@ -602,23 +609,23 @@ class pyComet2:
                         self.format += "#%04x" % adr + "=#%04x"
                     self.var_list.append('self.m.memory[%d]' % adr )
             except:
-                print >> sys.stderr, "Warning: Invalid monitor target is found. %s is ignored." % s
+                print >> sys.stderr, ("Warning: Invalid monitor target is found."
+                                      " %s is ignored." % s)
 
     def __init__(self):
-        self.inst_list = [NOP, LD2, ST, LAD, LD1,
-                          ADDA2, SUBA2, ADDL2, SUBL2,
-                          ADDA1, SUBA1, ADDL1, SUBL1,
-                          AND2, OR2, XOR2, AND1, OR1, XOR1,
-                          CPA2, CPL2, CPA1, CPL1,
-                          SLA, SRA, SLL, SRL,
-                          JMI, JNZ, JZE, JUMP, JPL, JOV,
-                          PUSH, POP, CALL, RET, SVC,
-                          IN, OUT, RPUSH, RPOP]
+        self.inst_list = [nop, ld2, st, lad, ld1,
+                          adda2, suba2, addl2, subl2,
+                          adda1, suba1, addl1, subl1,
+                          and2, or2, xor2, and1, or1, xor1,
+                          cpa2, cpl2, cpa1, cpl1,
+                          sla, sra, sll, srl,
+                          jmi, jnz, jze, jump, jpl, jov,
+                          push, pop, call, ret, svc,
+                          in_, out, rpush, rpop]
 
         self.inst_table = {}
-        for c in self.inst_list:
-            i = c(self)
-            self.inst_table[i.opcode] = i
+        for ir in self.inst_list:
+            self.inst_table[ir.opcode] = ir
 
         self.isAutoDump = False
         self.break_points = []
@@ -629,13 +636,20 @@ class pyComet2:
         self.initialize()
 
     def initialize(self):
-        self.memory = array.array('H', [0]*65536) # 主記憶 1 word = 2 byte unsigned short
-        self.GR = array.array('H', [0]*9) # レジスタ unsigned short
-        self.setSP(initSP) # スタックポインタ SP = GR[8]
-        self.PR = 0 # プログラムレジスタ
-        self.OF = 0 # Overflow Flag
-        self.SF = 0 # Sign Flag
-        self.ZF = 1 # Zero Flag
+        # 主記憶 1 word = 2 byte unsigned short
+        self.memory = array.array('H', [0] * 65536)
+        # レジスタ unsigned short
+        self.GR = array.array('H', [0] * 9)
+        # スタックポインタ SP = GR[8]
+        self.setSP(initSP)
+        # プログラムレジスタ
+        self.PR = 0
+        # Overflow Flag
+        self.OF = 0
+        # Sign Flag
+        self.SF = 0
+        # Zero Flag
+        self.ZF = 1
         logging.info('Initialize memory and registers.')
 
     def setSP(self, value):
@@ -649,16 +663,23 @@ class pyComet2:
             code = self.getInstruction().disassemble(self.PR)
         except:
             code = '%04x' % self.memory[self.PR]
-        sys.stderr.write('PR  #%04x [ %-30s ]  STEP %d\n' % (self.PR, code, self.step_count) )
-        sys.stderr.write('SP  #%04x(%7d) FR(OF, SF, ZF)  %03s  (%7d)\n' % (self.getSP(), self.getSP(),
-                                                                           self.getFRasString(), self.getFR()))
-        sys.stderr.write('GR0 #%04x(%7d) GR1 #%04x(%7d) GR2 #%04x(%7d) GR3: #%04x(%7d)\n'
-                         % (self.GR[0], l2a(self.GR[0]), self.GR[1], l2a(self.GR[1]),
-                            self.GR[2], l2a(self.GR[2]), self.GR[3], l2a(self.GR[3])))
-        sys.stderr.write('GR4 #%04x(%7d) GR5 #%04x(%7d) GR6 #%04x(%7d) GR7: #%04x(%7d)\n'
-                         % (self.GR[4], l2a(self.GR[4]), self.GR[5], l2a(self.GR[5]),
-                            self.GR[6], l2a(self.GR[6]), self.GR[7], l2a(self.GR[7])))
-
+        sys.stderr.write('PR  #%04x [ %-30s ]  STEP %d\n'
+                         % (self.PR, code, self.step_count) )
+        sys.stderr.write('SP  #%04x(%7d) FR(OF, SF, ZF)  %03s  (%7d)\n'
+                         % (self.getSP(), self.getSP(),
+                            self.getFRasString(), self.getFR()))
+        sys.stderr.write('GR0 #%04x(%7d) GR1 #%04x(%7d) '
+                         ' GR2 #%04x(%7d) GR3: #%04x(%7d)\n'
+                         % (self.GR[0], l2a(self.GR[0]),
+                            self.GR[1], l2a(self.GR[1]),
+                            self.GR[2], l2a(self.GR[2]),
+                            self.GR[3], l2a(self.GR[3])))
+        sys.stderr.write('GR4 #%04x(%7d) GR5 #%04x(%7d) '
+                         'GR6 #%04x(%7d) GR7: #%04x(%7d)\n'
+                         % (self.GR[4], l2a(self.GR[4]),
+                            self.GR[5], l2a(self.GR[5]),
+                            self.GR[6], l2a(self.GR[6]),
+                            self.GR[7], l2a(self.GR[7])))
 
     def exit(self):
         if self.isCountStep:
