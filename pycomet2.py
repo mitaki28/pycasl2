@@ -33,14 +33,8 @@ from optparse import OptionParser
 # argtypeに与える引数の種類
 noarg, r, r1r2, adrx, radrx, ds, dc, strlen = [0, 1, 2, 3, 4, 5, 6, 7]
 # 機械語命令のバイト長
-inst_size = {noarg: 1,
-             r: 1,
-             r1r2: 1,
-             adrx: 2,
-             radrx: 2,
-             ds: -1,
-             dc: -1,
-             strlen: 3}
+inst_size = {noarg: 1, r: 1, r1r2: 1, adrx: 2,
+             radrx: 2, ds: -1, dc: -1, strlen: 3}
 # スタックポインタの初期値
 initSP = 0xff00
 
@@ -609,7 +603,8 @@ class pyComet2:
                         self.format += "#%04x" % adr + "=#%04x"
                     self.var_list.append('self.m.memory[%d]' % adr )
             except:
-                print >> sys.stderr, ("Warning: Invalid monitor target is found."
+                print >> sys.stderr, ("Warning: Invalid monitor "
+                                      "target is found."
                                       " %s is ignored." % s)
 
     def __init__(self):
@@ -707,17 +702,16 @@ class pyComet2:
         return str(self.OF) + str(self.SF) + str(self.ZF)
 
     # PRが指す命令を返す
-    def getInstruction(self, adr = None):
+    def getInstruction(self, adr=None):
         try:
-            if adr == None:
-                adr = self.PR
+            if adr is None: adr = self.PR
             return self.inst_table[(self.memory[adr] & 0xff00) >> 8]
         except KeyError:
             raise self.InvalidOperation(adr)
 
     # 命令を1つ実行
     def step(self):
-        self.getInstruction().execute()
+        self.getInstruction()()
         self.step_count += 1
 
     def watch(self, variables, decimalFlag=False):
@@ -770,35 +764,38 @@ class pyComet2:
         if not quiet:
             print >> sys.stderr, 'done.'
 
-    def dump_memory(self, start_addr = 0x0000, lines = 0xffff / 8):
+    def dump_memory(self, start_addr=0x0000, lines=0xffff / 8):
+        printable = (string.letters
+                     + string.digits
+                     + string.punctuation + ' ')
+
         def to_char(array):
             def chr2(i):
                 c = 0x00ff & i
-                if chr(c) in (string.letters + string.digits + string.punctuation + ' ') :
-                    return chr(c)
-                else:
-                    return '.'
-
-            return reduce(lambda x,y: x+y, [chr2(i) for i in array])
+                return chr(c) if chr(c) in printable else '.'
+            return ''.join([chr2(i) for i in array])
 
         def to_hex(array):
-            return reduce(lambda x,y: x+' '+y, ['%04x' % i for i in array])
+            return ' '.join(['%04x' % i for i in array])
 
-        st = ''
+        st = []
         for i in range(0, lines):
             addr = i * 8 + start_addr
-            if 0xffff < addr: return
-            st += '%04x: %-39s %-8s\n' % (addr, to_hex(self.memory[addr:addr+8]), to_char(self.memory[addr:addr+8]))
-        return st
+            if 0xffff < addr: return st
+            st.append('%04x: %-39s %-8s\n'
+                      % (addr,
+                         to_hex(self.memory[addr:addr + 8]),
+                         to_char(self.memory[addr:addr + 8])))
+        return ''.join(st)
 
     # 8 * 16 wordsダンプする
-    def dump(self, start_addr = 0x0000):
+    def dump(self, start_addr=0x0000):
         print self.dump_memory(start_addr, 16),
 
     def dump_stack(self):
         print self.dump_memory(self.getSP(), 16),
 
-    def dump_to_file(self, filename, lines = 0xffff / 8):
+    def dump_to_file(self, filename, lines=0xffff / 8):
         fp = file(filename, 'w')
         fp.write('Step count: %d\n' % self.step_count)
         fp.write('PR: #%04x\n' % self.PR)
@@ -812,23 +809,38 @@ class pyComet2:
         fp.write(self.dump_memory(0, lines))
         fp.close()
 
-    def disassemble(self, start_addr = 0x0000):
+    def disassemble(self, start_addr=0x0000):
         addr = start_addr
         for i in range(0, 16):
             try:
                 inst = self.getInstruction(addr)
-                if inst != None:
-                    print >> sys.stderr, '#%04x\t#%04x\t%s' % (addr, self.memory[addr], inst.disassemble(addr))
+                if inst is not None:
+                    print >> sys.stderr, ('#%04x\t#%04x\t%s'
+                                          % (addr, self.memory[addr],
+                                             inst.disassemble(addr)))
                     if 1 < inst_size[inst.argtype]:
-                        print >> sys.stderr, '#%04x\t#%04x' % (addr+1, self.memory[addr+1])
+                        print >> sys.stderr, ('#%04x\t#%04x'
+                                              % (addr + 1,
+                                                 self.memory[addr + 1]))
                     if 2 < inst_size[inst.argtype]:
-                        print >> sys.stderr, '#%04x\t#%04x' % (addr+2, self.memory[addr+2])
+                        print >> sys.stderr, ('#%04x\t#%04x'
+                                              % (addr + 2,
+                                                 self.memory[addr + 2]))
                     addr += inst_size[inst.argtype]
                 else:
-                    print >> sys.stderr, '#%04x\t#%04x\t%s' % (addr, self.memory[addr], '%-8s#%04x' % ('DC', self.memory[addr]))
+                    print >> sys.stderr, ('#%04x\t#%04x\t%s'
+                                          % (addr,
+                                             self.memory[addr],
+                                             '%-8s#%04x'
+                                             % ('DC',
+                                                self.memory[addr])))
                     addr += 1
             except:
-                print >> sys.stderr, '#%04x\t#%04x\t%s' % (addr, self.memory[addr], '%-8s#%04x' % ('DC', self.memory[addr]))
+                print >> sys.stderr, ('#%04x\t#%04x\t%s'
+                                      % (addr,
+                                         self.memory[addr],
+                                         '%-8s#%04x' % ('DC',
+                                                        self.memory[addr])))
                 addr += 1
             #
         #
@@ -899,7 +911,8 @@ class pyComet2:
             elif line[0] == 'j':
                 self.jump(self.cast_int(args[1]))
             elif line[0] == 'm':
-                self.write_memory(self.cast_int(args[1]), self.cast_int(args[2]))
+                self.write_memory(self.cast_int(args[1]),
+                                  self.cast_int(args[2]))
             elif line[0] == 'p':
                 self.print_status()
             elif line[0] == 'r':
@@ -918,9 +931,11 @@ class pyComet2:
                 print >> sys.stderr, 'Invalid command.'
 
     def print_help(self):
-        print >> sys.stderr, 'b ADDR        Set a breakpoint at specified address.'
+        print >> sys.stderr, ('b ADDR        '
+                              'Set a breakpoint at specified address.')
         print >> sys.stderr, 'd NUM         Delete breakpoints.'
-        print >> sys.stderr, 'di ADDR       Disassemble 32 words from specified address.'
+        print >> sys.stderr, ('di ADDR       '
+                              'Disassemble 32 words from specified address.')
         print >> sys.stderr, 'du ADDR       Dump 128 words of memory.'
         print >> sys.stderr, 'h             Print help.'
         print >> sys.stderr, 'i             Print breakpoints.'
@@ -936,12 +951,23 @@ class pyComet2:
 def main():
     usage = 'usage: %prog [options] input.com'
     parser = OptionParser(usage)
-    parser.add_option('-c', '--count-step', action='store_true', dest='count_step', default=False, help='count step.')
-    parser.add_option('-d', '--dump', action='store_true', dest='dump', default=False, help='dump last status to last_state.txt.')
-    parser.add_option('-r', '--run', action='store_true', dest='run', default=False, help='run')
-    parser.add_option('-w', '--watch', type='string', dest='watchVariables', default='', help='run in watching mode. (ex. -w PR,GR0,GR8,#001f)')
-    parser.add_option('-D', '--Decimal', action='store_true', dest='decimalFlag', default=False, help='watch GR[0-8] and specified address in decimal notation. (Effective in watcing mode only)')
-    parser.add_option('-v', '--version', action='store_true', dest='version', default=False, help='display version information.')
+    parser.add_option('-c', '--count-step', action='store_true',
+                      dest='count_step', default=False, help='count step.')
+    parser.add_option('-d', '--dump', action='store_true',
+                      dest='dump', default=False,
+                      help='dump last status to last_state.txt.')
+    parser.add_option('-r', '--run', action='store_true',
+                      dest='run', default=False, help='run')
+    parser.add_option('-w', '--watch', type='string',
+                      dest='watchVariables', default='',
+                      help='run in watching mode. (ex. -w PR,GR0,GR8,#001f)')
+    parser.add_option('-D', '--Decimal', action='store_true',
+                      dest='decimalFlag', default=False,
+                      help='watch GR[0-8] and specified address in decimal '
+                           'notation. (Effective in watcing mode only)')
+    parser.add_option('-v', '--version', action='store_true',
+                      dest='version', default=False,
+                      help='display version information.')
     options, args = parser.parse_args()
 
     if options.version:
