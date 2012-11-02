@@ -421,7 +421,18 @@ class Disassembler(object):
         self.m = machine
 
     def disassemble(self, addr, num=16):
-        return (addr, self.dis_inst(addr))
+        for i in xrange(num):
+            try:
+                (addr, inst) = self.m.getInstruction(addr)
+                yield  self.dis_inst(addr)
+                if 1 < inst.argtype.size:
+                    yield (addr + 1, '')
+                if 2 < inst.argtype.size:
+                    yield (addr + 2, '')
+                addr += inst.argtype.size
+            except InvalidOperation:
+                yield (addr, self.dis_inst(addr))
+                addr += 1
 
     def dis_inst(self, addr):
         try:
@@ -723,39 +734,9 @@ class PyComet2(object):
 
     def disassemble(self, start_addr=0x0000):
         addr = start_addr
-        for i in range(0, 16):
-            try:
-                inst = self.getInstruction(addr)
-                if inst is not None:
-                    print >> sys.stderr, ('#%04x\t#%04x\t%s'
-                                          % (addr, self.memory[addr],
-                                             self.dis.dis_inst(addr)))
-                    if 1 < inst.argtype.size:
-                        print >> sys.stderr, ('#%04x\t#%04x'
-                                              % (addr + 1,
-                                                 self.memory[addr + 1]))
-                    if 2 < inst.argtype.size:
-                        print >> sys.stderr, ('#%04x\t#%04x'
-                                              % (addr + 2,
-                                                 self.memory[addr + 2]))
-                    addr += inst.argtype.size
-                else:
-                    print >> sys.stderr, ('#%04x\t#%04x\t%s'
-                                          % (addr,
-                                             self.memory[addr],
-                                             '%-8s#%04x'
-                                             % ('DC',
-                                                self.memory[addr])))
-                    addr += 1
-            except InvalidOperation:
-                print >> sys.stderr, ('#%04x\t#%04x\t%s'
-                                      % (addr,
-                                         self.memory[addr],
-                                         '%-8s#%04x' % ('DC',
-                                                        self.memory[addr])))
-                addr += 1
-            #
-        #
+        for addr, dis in self.dis.disassemble(addr, 16):
+            print >> sys.stderr, ('#%04x\t#%04x\t%s'
+                                  % (addr, self.memory[addr], dis))
 
     def cast_int(self, addr):
         if addr[0] == '#':
