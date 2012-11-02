@@ -30,10 +30,12 @@ from functools import wraps
 from optparse import OptionParser
 
 from utils import l2a, a2l, get_bit
-from types import noarg, r, r1r2, adrx, radrx, strlen
+from argtype import noarg, r, r1r2, adrx, radrx, strlen
+
 
 # スタックポインタの初期値
 initSP = 0xff00
+
 
 def get_effective_address(m, adr, x):
     ''' 実効アドレスを返す '''
@@ -71,13 +73,12 @@ def instruction(opcode, opname, argtype):
         @wraps(ir)
         def __(machine):
             try:
-                getter = arg_getter_table[argtype]
-                result = ir(machine, *getter(machine))
+                result = ir(machine, *argtype(machine))
             except Jump as jump:
                 machine.PR = jump.addr
                 result = jump.result
             else:
-                machine.PR += inst_size[argtype]
+                machine.PR += argtype.size
             if result is not None:
                 machine.ZF = machine.ZF if result[0] is None else result[0]
                 machine.SF = machine.SF if result[1] is None else result[1]
@@ -113,7 +114,7 @@ def lad(machine, r, adr, x):
 @instruction(0x14, 'LD', r1r2)
 def ld1(machine, r1, r2):
     machine.GR[r1] = machine.GR[r2]
-    return flags(machine.GR[r], OF=0)
+    return flags(machine.GR[r1], OF=0)
 
 
 @instruction(0x20, 'ADDA', radrx)
@@ -417,18 +418,17 @@ class Disassembler(object):
 
     def __init__(self, machine):
         self.m = machine
-        self.disassemble_functions = {noarg: self.disassemble_noarg,
-                                      r: self.disassemble_r,
-                                      r1r2: self.disassemble_r1r2,
-                                      adrx: self.disassemble_adrx,
-                                      radrx: self.disassemble_radrx,
-                                      strlen: self.disassemble_strlen}
+        self.dis_funcs = {noarg: self.disassemble_noarg,
+                          r: self.disassemble_r,
+                          r1r2: self.disassemble_r1r2,
+                          adrx: self.disassemble_adrx,
+                          radrx: self.disassemble_radrx,
+                          strlen: self.disassemble_strlen}
 
     def dis_inst(self, addr):
         inst = self.m.getInstruction(addr)
-        typ = inst.argtype
-        args = arg_getter_table[typ](self.m, addr)
-        d = self.disassemble_functions[typ](inst, *args)
+        args = inst.argtype(self.m, addr)
+        d = self.dis_funcs[inst.argtype](inst, *args)
         return d
 
     def disassemble_noarg(self, inst):
@@ -728,15 +728,15 @@ class pyComet2:
                     print >> sys.stderr, ('#%04x\t#%04x\t%s'
                                           % (addr, self.memory[addr],
                                              self.dis.dis_inst(addr)))
-                    if 1 < inst_size[inst.argtype]:
+                    if 1 < inst.argtype.size:
                         print >> sys.stderr, ('#%04x\t#%04x'
                                               % (addr + 1,
                                                  self.memory[addr + 1]))
-                    if 2 < inst_size[inst.argtype]:
+                    if 2 < inst.argtype.size:
                         print >> sys.stderr, ('#%04x\t#%04x'
                                               % (addr + 2,
                                                  self.memory[addr + 2]))
-                    addr += inst_size[inst.argtype]
+                    addr += inst.argtype.size
                 else:
                     print >> sys.stderr, ('#%04x\t#%04x\t%s'
                                           % (addr,
