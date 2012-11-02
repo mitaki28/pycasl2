@@ -31,82 +31,6 @@ from functools import wraps
 from optparse import OptionParser
 
 
-class InstType(object):
-    size = 0
-
-    @staticmethod
-    def get(machine, addr=None):
-        raise NotImplementedError
-
-
-class TypeNoArg(InstType):
-    size = 1
-
-    @staticmethod
-    def get(machine, addr=None):
-        return tuple()
-
-
-class TypeR(InstType):
-    size = 1
-
-    @staticmethod
-    def get(machine, addr=None):
-        if addr is None: addr = machine.PR
-        a = machine.memory[addr]
-        return (0x00f0 & a) >> 4,
-
-
-class TypeR1R2(InstType):
-    size = 1
-
-    @staticmethod
-    def get(machine, addr=None):
-        if addr is None: addr = machine.PR
-        a = machine.memory[addr]
-        r1 = ((0x00f0 & a) >> 4)
-        r2 = (0x000f & a)
-        return r1, r2
-
-
-class TypeAdrX(InstType):
-    size = 2
-
-    @staticmethod
-    def get(machine, addr=None):
-        if addr is None: addr = machine.PR
-        a = machine.memory[addr]
-        b = machine.memory[addr + 1]
-        x = (0x000f & a)
-        adr = b
-        return adr, x
-
-
-class TypeRAdrX(InstType):
-    size = 2
-
-    @staticmethod
-    def get(machine, addr=None):
-        if addr is None: addr = machine.PR
-        a = machine.memory[addr]
-        b = machine.memory[addr + 1]
-        r = ((0x00f0 & a) >> 4)
-        x = (0x000f & a)
-        adr = b
-        return r, adr, x
-
-
-class TypeStrlen(InstType):
-    size = 3
-
-    @staticmethod
-    def get(machine, addr=None):
-        if addr is None: addr = machine.PR
-        s = machine.memory[addr + 1]
-        l = machine.memory[addr + 2]
-        return s, l
-
-
 # argtypeに与える引数の種類
 noarg, r, r1r2, adrx, radrx, ds, dc, strlen = [0, 1, 2, 3, 4, 5, 6, 7]
 # 機械語命令のバイト長
@@ -565,9 +489,10 @@ def ret(machine):
     if machine.call_level == 0:
         machine.step_count += 1
         machine.exit()
+    adr = machine.memory[machine.getSP()]
     machine.setSP(machine.getSP() + 1)
     machine.call_level -= 1
-    raise Jump(machine.memory[machine.getSP() - 1] + 2)
+    raise Jump(adr + 2)
 
 
 @instruction(0xf0, 'SVC', adrx)
