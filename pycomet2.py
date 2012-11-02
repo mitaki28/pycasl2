@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-
 '''
 PyCOMET2, COMET II emulator implemented in Python.
+Copyright (c) 2012, Yasuaki Mitani
 Copyright (c) 2009, Masahiko Nakamoto.
-All rights reserved.
 
 Based on a simple implementation of COMET II emulator.
 Copyright (c) 2001-2008, Osamu Mizuno.
@@ -31,62 +30,10 @@ from functools import wraps
 from optparse import OptionParser
 
 from utils import l2a, a2l, get_bit
+from types import noarg, r, r1r2, adrx, radrx, strlen
 
-# argtypeに与える引数の種類
-noarg, r, r1r2, adrx, radrx, ds, dc, strlen = [0, 1, 2, 3, 4, 5, 6, 7]
-# 機械語命令のバイト長
-inst_size = {noarg: 1, r: 1, r1r2: 1, adrx: 2,
-             radrx: 2, ds: -1, dc: -1, strlen: 3}
 # スタックポインタの初期値
 initSP = 0xff00
-
-
-def get_r(machine, addr=None):
-    if addr is None: addr = machine.PR
-    a = machine.memory[addr]
-    return (0x00f0 & a) >> 4,
-
-
-def get_r1r2(machine, addr=None):
-    if addr is None: addr = machine.PR
-    a = machine.memory[addr]
-    r1 = ((0x00f0 & a) >> 4)
-    r2 = (0x000f & a)
-    return r1, r2
-
-
-def get_adrx(machine, addr=None):
-    if addr is None: addr = machine.PR
-    a = machine.memory[addr]
-    b = machine.memory[addr + 1]
-    x = (0x000f & a)
-    adr = b
-    return adr, x
-
-
-def get_radrx(machine, addr=None):
-    if addr is None: addr = machine.PR
-    a = machine.memory[addr]
-    b = machine.memory[addr + 1]
-    r = ((0x00f0 & a) >> 4)
-    x = (0x000f & a)
-    adr = b
-    return r, adr, x
-
-
-def get_strlen(machine, addr=None):
-    if addr is None: addr = machine.PR
-    s = machine.memory[addr + 1]
-    l = machine.memory[addr + 2]
-    return s, l
-
-arg_getter_table = {noarg: lambda machine, addr=None: tuple(),
-                    r: get_r,
-                    r1r2: get_r1r2,
-                    adrx: get_adrx,
-                    radrx: get_radrx,
-                    strlen: get_strlen}
-
 
 def get_effective_address(m, adr, x):
     ''' 実効アドレスを返す '''
