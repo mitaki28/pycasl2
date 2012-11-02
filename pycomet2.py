@@ -52,7 +52,7 @@ class Disassembler(object):
     def disassemble(self, addr, num=16):
         for i in xrange(num):
             try:
-                inst = self.m.getInstruction(addr)
+                inst = self.m.get_instruction(addr)
                 yield addr, self.dis_inst(addr)
                 if 1 < inst.argtype.size:
                     yield (addr + 1, '')
@@ -65,7 +65,7 @@ class Disassembler(object):
 
     def dis_inst(self, addr):
         try:
-            inst = self.m.getInstruction(addr)
+            inst = self.m.get_instruction(addr)
             args = inst.argtype(self.m, addr)
             return getattr(self, 'dis_' + inst.argtype.__name__)(inst, *args)
         except:
@@ -148,7 +148,7 @@ class StatusMonitor:
                     self.vars.append(
                         self.watcher(
                             "#%04x" % adr + "=%04x", 'memory', adr))
-        except:
+        except ValueError:
             print >> sys.stderr, ("Warning: Invalid monitor "
                                   "target is found."
                                   " %s is ignored." % s)
@@ -179,7 +179,7 @@ class PyComet2(object):
         for ir in self.inst_list:
             self.inst_table[ir.opcode] = MethodType(ir, self, PyComet2)
 
-        self.isAutoDump = False
+        self.is_auto_dump = False
         self.break_points = []
         self.call_level = 0
         self.step_count = 0
@@ -241,26 +241,26 @@ class PyComet2(object):
                             self.GR[7], l2a(self.GR[7])))
 
     def exit(self):
-        if self.isCountStep:
+        if self.is_count_step:
             print 'Step count:', self.step_count
 
-        if self.isAutoDump:
+        if self.is_auto_dump:
             print >> sys.stderr, "dump last status to last_state.txt"
             self.dump_to_file('last_state.txt')
 
         sys.exit()
 
     def set_auto_dump(self, flg):
-        self.isAutoDump = flg
+        self.is_auto_dump = flg
 
     def set_count_step(self, flg):
-        self.isCountStep = flg
+        self.is_count_step = flg
 
-    def setLoggingLevel(self, lv):
+    def set_logging_level(self, lv):
         logging.basicConfig(level=lv)
 
     # PRが指す命令を返す
-    def getInstruction(self, adr=None):
+    def get_instruction(self, adr=None):
         try:
             if adr is None: adr = self.PR
             return self.inst_table[(self.memory[adr] & 0xff00) >> 8]
@@ -269,7 +269,7 @@ class PyComet2(object):
 
     # 命令を1つ実行
     def step(self):
-        self.getInstruction()()
+        self.get_instruction()()
         self.step_count += 1
 
     def watch(self, variables, decimalFlag=False):
