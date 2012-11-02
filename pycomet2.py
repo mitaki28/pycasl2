@@ -418,41 +418,31 @@ class Disassembler(object):
 
     def __init__(self, machine):
         self.m = machine
-        self.dis_funcs = {noarg: self.disassemble_noarg,
-                          r: self.disassemble_r,
-                          r1r2: self.disassemble_r1r2,
-                          adrx: self.disassemble_adrx,
-                          radrx: self.disassemble_radrx,
-                          strlen: self.disassemble_strlen}
 
     def dis_inst(self, addr):
         inst = self.m.getInstruction(addr)
         args = inst.argtype(self.m, addr)
-        d = self.dis_funcs[inst.argtype](inst, *args)
+        d = getattr(self, 'dis_' + inst.argtype.__name__)(inst, *args)
         return d
 
-    def disassemble_noarg(self, inst):
+    def dis_noarg(self, inst):
         return '%--8s' % inst.opname
 
-    def disassemble_r(self, inst, r):
+    def dis_r(self, inst, r):
         return '%-8sGR%1d' % (inst.opname, r)
 
-    def disassemble_r1r2(self, inst, r1, r2):
+    def dis_r1r2(self, inst, r1, r2):
         return '%-8sGR%1d, GR%1d' % (inst.opname, r1, r2)
 
-    def disassemble_adrx(self, inst, adr, x):
-        if x == 0:
-            return '%-8s#%04x' % (inst.opname, adr)
-        else:
-            return '%-8s#%04x, GR%1d' % (inst.opname, adr, x)
+    def dis_adrx(self, inst, adr, x):
+        if x == 0: return '%-8s#%04x' % (inst.opname, adr)
+        else: return '%-8s#%04x, GR%1d' % (inst.opname, adr, x)
 
-    def disassemble_radrx(self, inst, r, adr, x):
-        if x == 0:
-            return '%-8sGR%1d, #%04x' % (inst.opname, r, adr)
-        else:
-            return '%-8sGR%1d, #%04x, GR%1d' % (inst.opname, r, adr, x)
+    def dis_radrx(self, inst, r, adr, x):
+        if x == 0: return '%-8sGR%1d, #%04x' % (inst.opname, r, adr)
+        else: return '%-8sGR%1d, #%04x, GR%1d' % (inst.opname, r, adr, x)
 
-    def disassemble_strlen(self, inst, s, l):
+    def dis_strlen(self, inst, s, l):
         return '%-8s#%04x, #%04x' % (inst.opname, s, l)
 
 
