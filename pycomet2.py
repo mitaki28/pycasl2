@@ -423,8 +423,8 @@ class Disassembler(object):
     def disassemble(self, addr, num=16):
         for i in xrange(num):
             try:
-                (addr, inst) = self.m.getInstruction(addr)
-                yield  self.dis_inst(addr)
+                inst = self.m.getInstruction(addr)
+                yield addr, self.dis_inst(addr)
                 if 1 < inst.argtype.size:
                     yield (addr + 1, '')
                 if 2 < inst.argtype.size:
@@ -777,10 +777,7 @@ class PyComet2(object):
         self.print_status()
 
     def wait_for_command(self):
-        while True:
-            sys.stderr.write('pycomet2> ')
-            sys.stderr.flush()
-            line = sys.stdin.readline()
+            line = raw_input('pycomet2> ')
             args = line.split()
             if line[0] == 'q':
                 break
@@ -895,4 +892,15 @@ def main():
         comet2.wait_for_command()
 
 if __name__ == '__main__':
+    import os
+    import readline
+    histfile = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                            '.comet2_history')
+    try:
+        readline.read_history_file(histfile)
+    except IOError:
+        pass
+    import atexit
+    atexit.register(readline.write_history_file, histfile)
+    del os, histfile
     main()
