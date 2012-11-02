@@ -469,50 +469,56 @@ class Disassembler(object):
 class StatusMonitor:
     def __init__(self, machine):
         self.m = machine
-        self.format = '%04d: '
-        self.var_list = ['self.m.step_count']
+        self.vars = [self.watcher('%04d: ', 'step_count')]
         self.decimalFlag = False
 
     def __str__(self):
-        variables = ""
-        for v in self.var_list:
-            variables += v + ","
-        return eval("'%s' %% (%s)" % (self.format, variables))
+        return ' '.join([v() for v in self.vars])
+
+    def watcher(self, fmt, attr, index=None):
+        def _():
+            if index is None:
+                return fmt % getattr(self.m, attr)
+            else:
+                return fmt % getattr(self.m, attr)[index]
+        _.__name__ = 'watcher_' + attr
+        if index is not None: _.__name__ += '[' + str(index) + ']'
+        return _
 
     def append(self, s):
-        if len(self.format) != 6:
-            self.format += ", "
-
         try:
             if s == 'PR':
-                self.format += "PR=#%04x"
-                self.var_list.append('self.m.PR')
+                self.vars.append(self.watcher("PR=#%04x", 'PR'))
             elif s == 'OF':
-                self.format += "OF=%01d"
-                self.var_list.append('self.m.OF')
+                self.vars.append(self.watcher("OF=#%01d", 'OF'))
             elif s == 'SF':
-                self.format += "SF=%01d"
-                self.var_list.append('self.m.SF')
+                self.vars.append(self.watcher("SF=#%01d", 'SF'))
             elif s == 'ZF':
-                self.format += "ZF=%01d"
-                self.var_list.append('self.m.ZF')
+                self.vars.append(self.watcher("ZF=#%01d", 'ZF'))
             elif s[0:2] == 'GR':
-                if int(s[2]) < 0 or 8 < int(s[2]):
+                reg = int(s[2])
+                if reg < 0 or 8 < reg:
                     raise
                 if self.decimalFlag:
-                    self.format += s[0:3] + "=%d"
+                    self.vars.append(
+                        self.watcher(
+                            "GR" + str(reg) + "=#%d", 'GR', reg))
                 else:
-                    self.format += s[0:3] + "=#%04x"
-                self.var_list.append('self.m.GR[' + s[2] + ']')
+                    self.vars.append(
+                        self.watcher(
+                            "GR" + str(reg) + "=#%04x", 'GR', reg))
             else:
                 adr = self.m.cast_int(s)
                 if adr < 0 or 0xffff < adr:
                     raise
                 if self.decimalFlag:
-                    self.format += "#%04x" % adr + "=%d"
+                    self.vars.append(
+                        self.watcher(
+                            "#%04x" % adr + "=%d", 'memory', adr))
                 else:
-                    self.format += "#%04x" % adr + "=#%04x"
-                self.var_list.append('self.m.memory[%d]' % adr )
+                    self.vars.append(
+                        self.watcher(
+                            "#%04x" % adr + "=%04x", 'memory', adr))
         except:
             print >> sys.stderr, ("Warning: Invalid monitor "
                                   "target is found."
