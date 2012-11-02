@@ -1,4 +1,4 @@
-# -*- coding: euc-jp -*-
+# -*- coding: utf-8 -*-
 
 '''
 PyCOMET2, COMET II emulator implemented in Python.
@@ -30,42 +30,15 @@ import logging
 from functools import wraps
 from optparse import OptionParser
 
+from utils import l2a, a2l, get_bit
 
-# argtype¤ËÍ¿¤¨¤ë°ú¿ô¤Î¼ïÎà
+# argtypeã«ä¸Žãˆã‚‹å¼•æ•°ã®ç¨®é¡ž
 noarg, r, r1r2, adrx, radrx, ds, dc, strlen = [0, 1, 2, 3, 4, 5, 6, 7]
-# µ¡³£¸ìÌ¿Îá¤Î¥Ð¥¤¥ÈÄ¹
+# æ©Ÿæ¢°èªžå‘½ä»¤ã®ãƒã‚¤ãƒˆé•·
 inst_size = {noarg: 1, r: 1, r1r2: 1, adrx: 2,
              radrx: 2, ds: -1, dc: -1, strlen: 3}
-# ¥¹¥¿¥Ã¥¯¥Ý¥¤¥ó¥¿¤Î½é´üÃÍ
+# ã‚¹ã‚¿ãƒƒã‚¯ãƒã‚¤ãƒ³ã‚¿ã®åˆæœŸå€¤
 initSP = 0xff00
-
-
-def l2a(x):
-    ''' unsigned -> signed '''
-    x &= 0xffff
-    if 0x0000 <= x <= 0x7fff:
-        a = x
-    elif 0x8000 <= x <= 0xffff:
-        a = x - 2 ** 16
-    else:
-        raise TypeError
-    return a
-
-
-def a2l(x):
-    ''' signed -> unsigned '''
-    x &= 0xffff
-    if 0 <= x:
-        return x
-    return x + 2 ** 16
-
-
-def get_bit(x, n):
-    ''' x¤În¥Ó¥Ã¥ÈÌÜ¤ÎÃÍ¤òÊÖ¤¹ (ºÇ²¼°Ì¥Ó¥Ã¥È¤¬n = 0)'''
-    if x & (0x01 << n) == 0:
-        return 0
-    else:
-        return 1
 
 
 def get_r(machine, addr=None):
@@ -116,19 +89,19 @@ arg_getter_table = {noarg: lambda machine, addr=None: tuple(),
 
 
 def get_effective_address(m, adr, x):
-    ''' ¼Â¸ú¥¢¥É¥ì¥¹¤òÊÖ¤¹ '''
+    ''' å®ŸåŠ¹ã‚¢ãƒ‰ãƒ¬ã‚¹ã‚’è¿”ã™ '''
     return adr if x == 0 else a2l(adr + m.GR[x])
 
 
 def get_value_at_effective_address(m, adr, x):
-    ''' ¼Â¸ú¥¢¥É¥ì¥¹ÈÖÃÏ¤ÎÃÍ¤òÊÖ¤¹ '''
+    ''' å®ŸåŠ¹ã‚¢ãƒ‰ãƒ¬ã‚¹ç•ªåœ°ã®å€¤ã‚’è¿”ã™ '''
     return m.memory[adr] if x == 0 else m.memory[a2l(adr + m.GR[x])]
 
 
 def flags(result, logical=False, ZF=None, SF=None, OF=None):
     '''
-    ·×»»·ë²Ì¤Ë±þ¤¸¤¿¥Õ¥é¥°¤òÊÖ¤¹
-    ÏÀÍý±é»»¤Î¾ì¹ç¤ÏÂèÆó°ú¿ô¤òTrue¤Ë¤¹¤ë
+    è¨ˆç®—çµæžœã«å¿œã˜ãŸãƒ•ãƒ©ã‚°ã‚’è¿”ã™
+    è«–ç†æ¼”ç®—ã®å ´åˆã¯ç¬¬äºŒå¼•æ•°ã‚’Trueã«ã™ã‚‹
     '''
     if ZF is None: ZF = (result == 0)
     if SF is None: SF = (get_bit(result, 15) == 0)
@@ -167,49 +140,6 @@ def instruction(opcode, opname, argtype):
         __.argtype = argtype
         return __
     return _
-
-
-class Disassembler(object):
-
-    def __init__(self, machine):
-        self.m = machine
-        self.disassemble_functions = {noarg: self.disassemble_noarg,
-                                      r: self.disassemble_r,
-                                      r1r2: self.disassemble_r1r2,
-                                      adrx: self.disassemble_adrx,
-                                      radrx: self.disassemble_radrx,
-                                      strlen: self.disassemble_strlen}
-
-    def disassemble(self, addr):
-        inst = self.m.getInstruction(addr)
-        typ = inst.argtype
-        args = arg_getter_table[typ](self.m, addr)
-        d = self.disassemble_functions[typ](inst, *args)
-        return d
-
-    def disassemble_noarg(self, inst):
-        return '%--8s' % inst.opname
-
-    def disassemble_r(self, inst, r):
-        return '%-8sGR%1d' % (inst.opname, r)
-
-    def disassemble_r1r2(self, inst, r1, r2):
-        return '%-8sGR%1d, GR%1d' % (inst.opname, r1, r2)
-
-    def disassemble_adrx(self, inst, adr, x):
-        if x == 0:
-            return '%-8s#%04x' % (inst.opname, adr)
-        else:
-            return '%-8s#%04x, GR%1d' % (inst.opname, adr, x)
-
-    def disassemble_radrx(self, inst, r, adr, x):
-        if x == 0:
-            return '%-8sGR%1d, #%04x' % (inst.opname, r, adr)
-        else:
-            return '%-8sGR%1d, #%04x, GR%1d' % (inst.opname, r, adr, x)
-
-    def disassemble_strlen(self, inst, s, l):
-        return '%-8s#%04x, #%04x' % (inst.opname, s, l)
 
 
 @instruction(0x00, 'NOP', noarg)
@@ -536,6 +466,49 @@ def rpop(machine):
         machine.setSP(machine.getSP() + 1)
 
 
+class Disassembler(object):
+
+    def __init__(self, machine):
+        self.m = machine
+        self.disassemble_functions = {noarg: self.disassemble_noarg,
+                                      r: self.disassemble_r,
+                                      r1r2: self.disassemble_r1r2,
+                                      adrx: self.disassemble_adrx,
+                                      radrx: self.disassemble_radrx,
+                                      strlen: self.disassemble_strlen}
+
+    def dis_inst(self, addr):
+        inst = self.m.getInstruction(addr)
+        typ = inst.argtype
+        args = arg_getter_table[typ](self.m, addr)
+        d = self.disassemble_functions[typ](inst, *args)
+        return d
+
+    def disassemble_noarg(self, inst):
+        return '%--8s' % inst.opname
+
+    def disassemble_r(self, inst, r):
+        return '%-8sGR%1d' % (inst.opname, r)
+
+    def disassemble_r1r2(self, inst, r1, r2):
+        return '%-8sGR%1d, GR%1d' % (inst.opname, r1, r2)
+
+    def disassemble_adrx(self, inst, adr, x):
+        if x == 0:
+            return '%-8s#%04x' % (inst.opname, adr)
+        else:
+            return '%-8s#%04x, GR%1d' % (inst.opname, adr, x)
+
+    def disassemble_radrx(self, inst, r, adr, x):
+        if x == 0:
+            return '%-8sGR%1d, #%04x' % (inst.opname, r, adr)
+        else:
+            return '%-8sGR%1d, #%04x, GR%1d' % (inst.opname, r, adr, x)
+
+    def disassemble_strlen(self, inst, s, l):
+        return '%-8s#%04x, #%04x' % (inst.opname, s, l)
+
+
 class pyComet2:
     class InvalidOperation(BaseException):
         def __init__(self, address):
@@ -616,18 +589,18 @@ class pyComet2:
         self.call_level = 0
         self.step_count = 0
         self.monitor = self.StatusMonitor(self)
-        self.disassembler = Disassembler(self)
+        self.dis = Disassembler(self)
 
         self.initialize()
 
     def initialize(self):
-        # ¼çµ­²± 1 word = 2 byte unsigned short
+        # ä¸»è¨˜æ†¶ 1 word = 2 byte unsigned short
         self.memory = array.array('H', [0] * 65536)
-        # ¥ì¥¸¥¹¥¿ unsigned short
+        # ãƒ¬ã‚¸ã‚¹ã‚¿ unsigned short
         self.GR = array.array('H', [0] * 9)
-        # ¥¹¥¿¥Ã¥¯¥Ý¥¤¥ó¥¿ SP = GR[8]
+        # ã‚¹ã‚¿ãƒƒã‚¯ãƒã‚¤ãƒ³ã‚¿ SP = GR[8]
         self.setSP(initSP)
-        # ¥×¥í¥°¥é¥à¥ì¥¸¥¹¥¿
+        # ãƒ—ãƒ­ã‚°ãƒ©ãƒ ãƒ¬ã‚¸ã‚¹ã‚¿
         self.PR = 0
         # Overflow Flag
         self.OF = 0
@@ -691,7 +664,7 @@ class pyComet2:
     def getFRasString(self):
         return str(self.OF) + str(self.SF) + str(self.ZF)
 
-    # PR¤¬»Ø¤¹Ì¿Îá¤òÊÖ¤¹
+    # PRãŒæŒ‡ã™å‘½ä»¤ã‚’è¿”ã™
     def getInstruction(self, adr=None):
         try:
             if adr is None: adr = self.PR
@@ -699,7 +672,7 @@ class pyComet2:
         except KeyError:
             raise self.InvalidOperation(adr)
 
-    # Ì¿Îá¤ò1¤Ä¼Â¹Ô
+    # å‘½ä»¤ã‚’1ã¤å®Ÿè¡Œ
     def step(self):
         self.getInstruction()(self)
         self.step_count += 1
@@ -734,7 +707,7 @@ class pyComet2:
                     self.dump(e.address)
                     break
 
-    # ¥ª¥Ö¥¸¥§¥¯¥È¥³¡¼¥É¤ò¼çµ­²±¤ËÆÉ¤ß¹þ¤à
+    # ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã‚³ãƒ¼ãƒ‰ã‚’ä¸»è¨˜æ†¶ã«èª­ã¿è¾¼ã‚€
     def load(self, filename, quiet=False):
         if not quiet:
             print >> sys.stderr, 'load %s ...' % filename,
@@ -778,7 +751,7 @@ class pyComet2:
                          to_char(self.memory[addr:addr + 8])))
         return ''.join(st)
 
-    # 8 * 16 words¥À¥ó¥×¤¹¤ë
+    # 8 * 16 wordsãƒ€ãƒ³ãƒ—ã™ã‚‹
     def dump(self, start_addr=0x0000):
         print self.dump_memory(start_addr, 16),
 
@@ -807,7 +780,7 @@ class pyComet2:
                 if inst is not None:
                     print >> sys.stderr, ('#%04x\t#%04x\t%s'
                                           % (addr, self.memory[addr],
-                                             self.disassembler.disassemble(addr)))
+                                             self.dis.dis_inst(addr)))
                     if 1 < inst_size[inst.argtype]:
                         print >> sys.stderr, ('#%04x\t#%04x'
                                               % (addr + 1,
