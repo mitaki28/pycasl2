@@ -28,6 +28,7 @@ import array
 import logging
 from functools import wraps
 from optparse import OptionParser
+from types import MethodType
 
 from utils import l2a, a2l, get_bit
 from argtype import noarg, r, r1r2, adrx, radrx, strlen
@@ -420,10 +421,12 @@ class Disassembler(object):
         self.m = machine
 
     def dis_inst(self, addr):
-        inst = self.m.getInstruction(addr)
-        args = inst.argtype(self.m, addr)
-        d = getattr(self, 'dis_' + inst.argtype.__name__)(inst, *args)
-        return d
+        try:
+            inst = self.m.getInstruction(addr)
+            args = inst.argtype(self.m, addr)
+            return getattr(self, 'dis_' + inst.argtype.__name__)(inst, *args)
+        except:
+            return self.dis_dc(addr)
 
     def dis_noarg(self, inst):
         return '%--8s' % inst.opname
@@ -445,66 +448,72 @@ class Disassembler(object):
     def dis_strlen(self, inst, s, l):
         return '%-8s#%04x, #%04x' % (inst.opname, s, l)
 
+    def dis_dc(self, addr):
+        return '%-8s#%04x' % ('DC', self.m.memory[addr])
 
-class pyComet2:
-    class InvalidOperation(BaseException):
-        def __init__(self, address):
-            self.address = address
 
-        def __str__(self):
-            return 'Invalid operation is found at #%04x.' % self.address
+class StatusMonitor:
+    def __init__(self, machine):
+        self.m = machine
+        self.format = '%04d: '
+        self.var_list = ['self.m.step_count']
+        self.decimalFlag = False
 
-    class StatusMonitor:
-        def __init__(self, machine):
-            self.m = machine
-            self.format = '%04d: '
-            self.var_list = ['self.m.step_count']
-            self.decimalFlag = False
+    def __str__(self):
+        variables = ""
+        for v in self.var_list:
+            variables += v + ","
+        return eval("'%s' %% (%s)" % (self.format, variables))
 
-        def __str__(self):
-            variables = ""
-            for v in self.var_list:
-                variables += v + ","
-            return eval("'%s' %% (%s)" % (self.format, variables))
+    def append(self, s):
+        if len(self.format) != 6:
+            self.format += ", "
 
-        def append(self, s):
-            if len(self.format) != 6:
-                self.format += ", "
-
-            try:
-                if s == 'PR':
-                    self.format += "PR=#%04x"
-                    self.var_list.append('self.m.PR')
-                elif s == 'OF':
-                    self.format += "OF=%01d"
-                    self.var_list.append('self.m.OF')
-                elif s == 'SF':
-                    self.format += "SF=%01d"
-                    self.var_list.append('self.m.SF')
-                elif s == 'ZF':
-                    self.format += "ZF=%01d"
-                    self.var_list.append('self.m.ZF')
-                elif s[0:2] == 'GR':
-                    if int(s[2]) < 0 or 8 < int(s[2]):
-                        raise
-                    if self.decimalFlag:
-                        self.format += s[0:3] + "=%d"
-                    else:
-                        self.format += s[0:3] + "=#%04x"
-                    self.var_list.append('self.m.GR[' + s[2] + ']')
+        try:
+            if s == 'PR':
+                self.format += "PR=#%04x"
+                self.var_list.append('self.m.PR')
+            elif s == 'OF':
+                self.format += "OF=%01d"
+                self.var_list.append('self.m.OF')
+            elif s == 'SF':
+                self.format += "SF=%01d"
+                self.var_list.append('self.m.SF')
+            elif s == 'ZF':
+                self.format += "ZF=%01d"
+                self.var_list.append('self.m.ZF')
+            elif s[0:2] == 'GR':
+                if int(s[2]) < 0 or 8 < int(s[2]):
+                    raise
+                if self.decimalFlag:
+                    self.format += s[0:3] + "=%d"
                 else:
-                    adr = self.m.cast_int(s)
-                    if adr < 0 or 0xffff < adr:
-                        raise
-                    if self.decimalFlag:
-                        self.format += "#%04x" % adr + "=%d"
-                    else:
-                        self.format += "#%04x" % adr + "=#%04x"
-                    self.var_list.append('self.m.memory[%d]' % adr )
-            except:
-                print >> sys.stderr, ("Warning: Invalid monitor "
-                                      "target is found."
-                                      " %s is ignored." % s)
+                    self.format += s[0:3] + "=#%04x"
+                self.var_list.append('self.m.GR[' + s[2] + ']')
+            else:
+                adr = self.m.cast_int(s)
+                if adr < 0 or 0xffff < adr:
+                    raise
+                if self.decimalFlag:
+                    self.format += "#%04x" % adr + "=%d"
+                else:
+                    self.format += "#%04x" % adr + "=#%04x"
+                self.var_list.append('self.m.memory[%d]' % adr )
+        except:
+            print >> sys.stderr, ("Warning: Invalid monitor "
+                                  "target is found."
+                                  " %s is ignored." % s)
+
+
+class InvalidOperation(BaseException):
+    def __init__(self, address):
+        self.address = address
+
+    def __str__(self):
+        return 'Invalid operation is found at #%04x.' % self.address
+
+
+class PyComet2:
 
     def __init__(self):
         self.inst_list = [nop, ld2, st, lad, ld1,
@@ -519,13 +528,13 @@ class pyComet2:
 
         self.inst_table = {}
         for ir in self.inst_list:
-            self.inst_table[ir.opcode] = ir
+            self.inst_table[ir.opcode] = MethodType(ir, self, PyComet2)
 
         self.isAutoDump = False
         self.break_points = []
         self.call_level = 0
         self.step_count = 0
-        self.monitor = self.StatusMonitor(self)
+        self.monitor = StatusMonitor(self)
         self.dis = Disassembler(self)
 
         self.initialize()
@@ -555,8 +564,8 @@ class pyComet2:
 
     def print_status(self):
         try:
-            code = self.getInstruction().disassemble(self.PR)
-        except:
+            code = self.dis.dis_inst(self.PR)
+        except InvalidOperation:
             code = '%04x' % self.memory[self.PR]
         sys.stderr.write('PR  #%04x [ %-30s ]  STEP %d\n'
                          % (self.PR, code, self.step_count) )
@@ -607,11 +616,11 @@ class pyComet2:
             if adr is None: adr = self.PR
             return self.inst_table[(self.memory[adr] & 0xff00) >> 8]
         except KeyError:
-            raise self.InvalidOperation(adr)
+            raise InvalidOperation(adr)
 
     # 命令を1つ実行
     def step(self):
-        self.getInstruction()(self)
+        self.getInstruction()()
         self.step_count += 1
 
     def watch(self, variables, decimalFlag=False):
@@ -627,7 +636,7 @@ class pyComet2:
                     print self.monitor
                     sys.stdout.flush()
                     self.step()
-                except self.InvalidOperation, e:
+                except InvalidOperation, e:
                     print >> sys.stderr, e
                     self.dump(e.address)
                     break
@@ -639,7 +648,7 @@ class pyComet2:
             else:
                 try:
                     self.step()
-                except self.InvalidOperation, e:
+                except InvalidOperation, e:
                     print >> sys.stderr, e
                     self.dump(e.address)
                     break
@@ -735,7 +744,7 @@ class pyComet2:
                                              % ('DC',
                                                 self.memory[addr])))
                     addr += 1
-            except self.InvalidOperation:
+            except InvalidOperation:
                 print >> sys.stderr, ('#%04x\t#%04x\t%s'
                                       % (addr,
                                          self.memory[addr],
@@ -822,7 +831,7 @@ class pyComet2:
             elif line[0] == 's':
                 try:
                     self.step()
-                except self.InvalidOperation, e:
+                except InvalidOperation as e:
                     print >> sys.stderr, e
                     self.dump(e.address)
 
@@ -881,7 +890,7 @@ def main():
         parser.print_help()
         sys.exit()
 
-    comet2 = pyComet2()
+    comet2 = PyComet2()
     comet2.set_auto_dump(options.dump)
     comet2.set_count_step(options.count_step)
     if len(options.watchVariables) != 0:
