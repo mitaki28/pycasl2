@@ -39,6 +39,83 @@ inst_size = {noarg: 1, r: 1, r1r2: 1, adrx: 2,
 initSP = 0xff00
 
 
+class InstType(object):
+
+    size = 0
+
+    @staticmethod
+    def get(machine, addr=None):
+        raise NotImplementedError
+
+
+class TypeNoArg(InstType):
+    size = 1
+
+    @staticmethod
+    def get(machine, addr=None):
+        return tuple()
+
+
+class TypeR(InstType):
+    size = 1
+
+    @staticmethod
+    def get(machine, addr=None):
+        if addr is None: addr = machine.PR
+        a = machine.memory[addr]
+        return (0x00f0 & a) >> 4,
+
+
+class TypeR1R2(InstType):
+    size = 1
+
+    @staticmethod
+    def get(machine, addr=None):
+        if addr is None: addr = machine.PR
+        a = machine.memory[addr]
+        r1 = ((0x00f0 & a) >> 4)
+        r2 = (0x000f & a)
+        return r1, r2
+
+
+class TypeAdrX(InstType):
+    size = 2
+
+    @staticmethod
+    def get(machine, addr=None):
+        if addr is None: addr = machine.PR
+        a = machine.memory[addr]
+        b = machine.memory[addr + 1]
+        x = (0x000f & a)
+        adr = b
+        return adr, x
+
+
+class TypeRAdrX(InstType):
+    size = 2
+
+    @staticmethod
+    def get(machine, addr=None):
+        if addr is None: addr = machine.PR
+        a = machine.memory[addr]
+        b = machine.memory[addr + 1]
+        r = ((0x00f0 & a) >> 4)
+        x = (0x000f & a)
+        adr = b
+        return r, adr, x
+
+
+class TypeStrlen(InstType):
+    size = 3
+
+    @staticmethod
+    def get(machine, addr=None):
+        if addr is None: addr = machine.PR
+        s = machine.memory[addr + 1]
+        l = machine.memory[addr + 2]
+        return s, l
+
+
 def l2a(x):
     ''' unsigned -> signed '''
     x &= 0xffff
@@ -101,11 +178,17 @@ def get_radrx(machine, addr=None):
 
 
 def get_strlen(machine, addr=None):
-    if addr is None:
-        addr = machine.PR
+    if addr is None: addr = machine.PR
     s = machine.memory[addr + 1]
     l = machine.memory[addr + 2]
     return s, l
+
+arg_getter_table = {noarg: lambda machine, addr: tuple(),
+                    r: get_r,
+                    r1r2: get_r1r2,
+                    adrx: get_adrx,
+                    radrx: get_radrx,
+                    strlen: get_strlen}
 
 
 def get_effective_address(m, adr, x):
@@ -143,7 +226,6 @@ def instruction(opcode, opname, argtype):
     def _(ir):
         @wraps(ir)
         def __(machine):
-            noarg, r, r1r2, adrx, radrx, ds, dc, strlen
             try:
                 if argtype == noarg:
                     result = ir()
@@ -165,14 +247,52 @@ def instruction(opcode, opname, argtype):
             else:
                 machine.PR += inst_size[argtype]
             if result is not None:
-                machine.ZF = result[0] or machine.ZF
-                machine.SF = result[1] or machine.SF
-                machine.OF = result[2] or machine.OF
+                machine.ZF = machine.ZF if result[0] is None else result[0]
+                machine.SF = machine.SF if result[1] is None else result[1]
+                machine.OF = machine.OF if result[2] is None else result[2]
         __.opcode = opcode
         __.opname = opname
         __.argtype = argtype
         return __
     return _
+
+
+class Disassembler:
+
+    def __init__(self, machine):
+        self.m = machine
+
+    def disassemble(self, addr):
+        pass
+
+    def disassemble_noarg(self, address):
+        return '%--8s' % self.opname
+
+    def disassemble_r(self, address):
+        r = self.get_r(address)
+        return '%-8sGR%1d' % (self.opname, r)
+
+    def disassemble_r1r2(self, address):
+        r1, r2 = self.get_r1r2(address)
+        return '%-8sGR%1d, GR%1d' % (self.opname, r1, r2)
+
+    def disassemble_adrx(self, address):
+        adr, x = self.get_adrx(address)
+        if x == 0:
+            return '%-8s#%04x' % (self.opname, adr)
+        else:
+            return '%-8s#%04x, GR%1d' % (self.opname, adr, x)
+
+    def disassemble_radrx(self, address):
+        r, adr, x = self.get_radrx(address)
+        if x == 0:
+            return '%-8sGR%1d, #%04x' % (self.opname, r, adr)
+        else:
+            return '%-8sGR%1d, #%04x, GR%1d' % (self.opname, r, adr, x)
+
+    def disassemble_strlen(self, address):
+        s, l = self.get_strlen(address)
+        return '%-8s#%04x, #%04x' % (self.opname, s, l)
 
 
 class Instruction:
@@ -711,7 +831,7 @@ class pyComet2:
 
     # 命令を1つ実行
     def step(self):
-        self.getInstruction()()
+        self.getInstruction()(self)
         self.step_count += 1
 
     def watch(self, variables, decimalFlag=False):
