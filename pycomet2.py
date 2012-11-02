@@ -30,7 +30,7 @@ from functools import wraps
 from optparse import OptionParser
 from types import MethodType
 
-from utils import l2a, a2l, get_bit
+from utils import l2a, a2l, get_bit, i2bin
 from argtype import noarg, r, r1r2, adrx, radrx, strlen
 
 
@@ -420,6 +420,9 @@ class Disassembler(object):
     def __init__(self, machine):
         self.m = machine
 
+    def disassemble(self, addr, num=16):
+        return (addr, self.dis_inst(addr))
+
     def dis_inst(self, addr):
         try:
             inst = self.m.getInstruction(addr)
@@ -556,6 +559,10 @@ class PyComet2(object):
         self.ZF = 1
         logging.info('Initialize memory and registers.')
 
+    @property
+    def FR(self):
+        return self.OF << 2 | self.SF << 1 | self.ZF
+
     def _set_SP(self, value):
         self.GR[8] = value
 
@@ -573,7 +580,7 @@ class PyComet2(object):
                          % (self.PR, code, self.step_count) )
         sys.stderr.write('SP  #%04x(%7d) FR(OF, SF, ZF)  %03s  (%7d)\n'
                          % (self.SP, self.SP,
-                            self.getFRasString(), self.getFR()))
+                            i2bin(self.FR, 3), self.FR))
         sys.stderr.write('GR0 #%04x(%7d) GR1 #%04x(%7d) '
                          ' GR2 #%04x(%7d) GR3: #%04x(%7d)\n'
                          % (self.GR[0], l2a(self.GR[0]),
@@ -605,12 +612,6 @@ class PyComet2(object):
 
     def setLoggingLevel(self, lv):
         logging.basicConfig(level=lv)
-
-    def getFR(self):
-        return self.OF << 2 | self.SF << 1 | self.ZF
-
-    def getFRasString(self):
-        return str(self.OF) + str(self.SF) + str(self.ZF)
 
     # PRが指す命令を返す
     def getInstruction(self, adr=None):

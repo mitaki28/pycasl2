@@ -27,3 +27,10 @@ def get_bit(x, n):
         return 0
     else:
         return 1
+
+
+def i2bin(n, fill=None):
+    if fill is None:
+        return bin(n).split('b')[-1]
+    else:
+        return bin(n).split('b')[-1].zfill(fill)
