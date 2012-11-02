@@ -30,17 +30,8 @@ import logging
 from functools import wraps
 from optparse import OptionParser
 
-# argtypeに与える引数の種類
-noarg, r, r1r2, adrx, radrx, ds, dc, strlen = [0, 1, 2, 3, 4, 5, 6, 7]
-# 機械語命令のバイト長
-inst_size = {noarg: 1, r: 1, r1r2: 1, adrx: 2,
-             radrx: 2, ds: -1, dc: -1, strlen: 3}
-# スタックポインタの初期値
-initSP = 0xff00
-
 
 class InstType(object):
-
     size = 0
 
     @staticmethod
@@ -116,6 +107,15 @@ class TypeStrlen(InstType):
         return s, l
 
 
+# argtypeに与える引数の種類
+noarg, r, r1r2, adrx, radrx, ds, dc, strlen = [0, 1, 2, 3, 4, 5, 6, 7]
+# 機械語命令のバイト長
+inst_size = {noarg: 1, r: 1, r1r2: 1, adrx: 2,
+             radrx: 2, ds: -1, dc: -1, strlen: 3}
+# スタックポインタの初期値
+initSP = 0xff00
+
+
 def l2a(x):
     ''' unsigned -> signed '''
     x &= 0xffff
@@ -147,7 +147,7 @@ def get_bit(x, n):
 def get_r(machine, addr=None):
     if addr is None: addr = machine.PR
     a = machine.memory[addr]
-    return (0x00f0 & a) >> 4
+    return (0x00f0 & a) >> 4,
 
 
 def get_r1r2(machine, addr=None):
@@ -183,7 +183,7 @@ def get_strlen(machine, addr=None):
     l = machine.memory[addr + 2]
     return s, l
 
-arg_getter_table = {noarg: lambda machine, addr: tuple(),
+arg_getter_table = {noarg: lambda machine, addr=None: tuple(),
                     r: get_r,
                     r1r2: get_r1r2,
                     adrx: get_adrx,
@@ -227,20 +227,8 @@ def instruction(opcode, opname, argtype):
         @wraps(ir)
         def __(machine):
             try:
-                if argtype == noarg:
-                    result = ir()
-                elif argtype == r:
-                    result = ir(machine, *get_r(machine))
-                elif argtype == r1r2:
-                    result = ir(machine, *get_r1r2(machine))
-                elif argtype == adrx:
-                    result = ir(machine, *get_adrx(machine))
-                elif argtype == radrx:
-                    result = ir(machine, *get_radrx(machine))
-                elif argtype == strlen:
-                    result = ir(machine, *get_strlen(machine))
-                else:
-                    raise Exception
+                getter = arg_getter_table[argtype]
+                result = ir(machine, *getter(machine))
             except Jump as jump:
                 machine.PR = jump.addr
                 result = jump.result
@@ -257,53 +245,10 @@ def instruction(opcode, opname, argtype):
     return _
 
 
-class Disassembler:
+class Disassembler(object):
 
     def __init__(self, machine):
         self.m = machine
-
-    def disassemble(self, addr):
-        pass
-
-    def disassemble_noarg(self, address):
-        return '%--8s' % self.opname
-
-    def disassemble_r(self, address):
-        r = self.get_r(address)
-        return '%-8sGR%1d' % (self.opname, r)
-
-    def disassemble_r1r2(self, address):
-        r1, r2 = self.get_r1r2(address)
-        return '%-8sGR%1d, GR%1d' % (self.opname, r1, r2)
-
-    def disassemble_adrx(self, address):
-        adr, x = self.get_adrx(address)
-        if x == 0:
-            return '%-8s#%04x' % (self.opname, adr)
-        else:
-            return '%-8s#%04x, GR%1d' % (self.opname, adr, x)
-
-    def disassemble_radrx(self, address):
-        r, adr, x = self.get_radrx(address)
-        if x == 0:
-            return '%-8sGR%1d, #%04x' % (self.opname, r, adr)
-        else:
-            return '%-8sGR%1d, #%04x, GR%1d' % (self.opname, r, adr, x)
-
-    def disassemble_strlen(self, address):
-        s, l = self.get_strlen(address)
-        return '%-8s#%04x, #%04x' % (self.opname, s, l)
-
-
-class Instruction:
-    '''
-    命令の基底クラス
-    '''
-    def __init__(self, machine, opcode=0x00, opname='None', argtype=noarg):
-        self.m = machine
-        self.opcode = opcode
-        self.opname = opname
-        self.argtype = argtype
         self.disassemble_functions = {noarg: self.disassemble_noarg,
                                       r: self.disassemble_r,
                                       r1r2: self.disassemble_r1r2,
@@ -311,37 +256,36 @@ class Instruction:
                                       radrx: self.disassemble_radrx,
                                       strlen: self.disassemble_strlen}
 
-    def disassemble(self, address):
-        return self.disassemble_functions[self.argtype](address)
+    def disassemble(self, addr):
+        inst = self.m.getInstruction(addr)
+        typ = inst.argtype
+        args = arg_getter_table[typ](self.m, addr)
+        d = self.disassemble_functions[typ](inst, *args)
+        return d
 
-    def disassemble_noarg(self, address):
-        return '%--8s' % self.opname
+    def disassemble_noarg(self, inst):
+        return '%--8s' % inst.opname
 
-    def disassemble_r(self, address):
-        r = self.get_r(address)
-        return '%-8sGR%1d' % (self.opname, r)
+    def disassemble_r(self, inst, r):
+        return '%-8sGR%1d' % (inst.opname, r)
 
-    def disassemble_r1r2(self, address):
-        r1, r2 = self.get_r1r2(address)
-        return '%-8sGR%1d, GR%1d' % (self.opname, r1, r2)
+    def disassemble_r1r2(self, inst, r1, r2):
+        return '%-8sGR%1d, GR%1d' % (inst.opname, r1, r2)
 
-    def disassemble_adrx(self, address):
-        adr, x = self.get_adrx(address)
+    def disassemble_adrx(self, inst, adr, x):
         if x == 0:
-            return '%-8s#%04x' % (self.opname, adr)
+            return '%-8s#%04x' % (inst.opname, adr)
         else:
-            return '%-8s#%04x, GR%1d' % (self.opname, adr, x)
+            return '%-8s#%04x, GR%1d' % (inst.opname, adr, x)
 
-    def disassemble_radrx(self, address):
-        r, adr, x = self.get_radrx(address)
+    def disassemble_radrx(self, inst, r, adr, x):
         if x == 0:
-            return '%-8sGR%1d, #%04x' % (self.opname, r, adr)
+            return '%-8sGR%1d, #%04x' % (inst.opname, r, adr)
         else:
-            return '%-8sGR%1d, #%04x, GR%1d' % (self.opname, r, adr, x)
+            return '%-8sGR%1d, #%04x, GR%1d' % (inst.opname, r, adr, x)
 
-    def disassemble_strlen(self, address):
-        s, l = self.get_strlen(address)
-        return '%-8s#%04x, #%04x' % (self.opname, s, l)
+    def disassemble_strlen(self, inst, s, l):
+        return '%-8s#%04x, #%04x' % (inst.opname, s, l)
 
 
 @instruction(0x00, 'NOP', noarg)
@@ -541,7 +485,7 @@ def sll(machine, r, adr, x):
     ans = ans & 0xffff
     machine.GR[r] = ans
     if 0 < v:
-        return flags(machine.GR[r], locical=True,
+        return flags(machine.GR[r], logical=True,
                      OF=get_bit(prev_p, 15 - (v - 1)))
     else:
         return flags(machine.GR[r], logical=True)
@@ -623,7 +567,7 @@ def ret(machine):
         machine.exit()
     machine.setSP(machine.getSP() + 1)
     machine.call_level -= 1
-    raise Jump(machine.memory[machine.getSP()] + 2)
+    raise Jump(machine.memory[machine.getSP() - 1] + 2)
 
 
 @instruction(0xf0, 'SVC', adrx)
@@ -747,6 +691,7 @@ class pyComet2:
         self.call_level = 0
         self.step_count = 0
         self.monitor = self.StatusMonitor(self)
+        self.disassembler = Disassembler(self)
 
         self.initialize()
 
@@ -937,7 +882,7 @@ class pyComet2:
                 if inst is not None:
                     print >> sys.stderr, ('#%04x\t#%04x\t%s'
                                           % (addr, self.memory[addr],
-                                             inst.disassemble(addr)))
+                                             self.disassembler.disassemble(addr)))
                     if 1 < inst_size[inst.argtype]:
                         print >> sys.stderr, ('#%04x\t#%04x'
                                               % (addr + 1,
@@ -955,7 +900,7 @@ class pyComet2:
                                              % ('DC',
                                                 self.memory[addr])))
                     addr += 1
-            except:
+            except self.InvalidOperation:
                 print >> sys.stderr, ('#%04x\t#%04x\t%s'
                                       % (addr,
                                          self.memory[addr],
