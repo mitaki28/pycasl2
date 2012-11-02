@@ -345,20 +345,20 @@ def jov(machine, adr, x):
 
 @instruction(0x70, 'PUSH', adrx)
 def push(machine, adr, x):
-    machine.setSP(machine.getSP() - 1)
-    machine.memory[machine.getSP()] = get_effective_address(machine, adr, x)
+    machine.SP -= 1
+    machine.memory[machine.SP] = get_effective_address(machine, adr, x)
 
 
 @instruction(0x71, 'POP', r)
 def pop(machine, r):
-    machine.GR[r] = machine.memory[machine.getSP()]
-    machine.setSP(machine.getSP() + 1)
+    machine.GR[r] = machine.memory[machine.SP]
+    machine.SP += 1
 
 
 @instruction(0x80, 'CALL', adrx)
 def call(machine, adr, x):
-    machine.setSP(machine.getSP() - 1)
-    machine.memory[machine.getSP()] = machine.PR
+    machine.SP -= 1
+    machine.memory[machine.SP] = machine.PR
     machine.call_level += 1
     raise Jump(get_effective_address(machine, adr, x))
 
@@ -368,8 +368,8 @@ def ret(machine):
     if machine.call_level == 0:
         machine.step_count += 1
         machine.exit()
-    adr = machine.memory[machine.getSP()]
-    machine.setSP(machine.getSP() + 1)
+    adr = machine.memory[machine.SP]
+    machine.SP += 1
     machine.call_level -= 1
     raise Jump(adr + 2)
 
@@ -404,15 +404,15 @@ def out(machine, s, l):
 @instruction(0xa0, 'RPUSH', noarg)
 def rpush(machine):
     for i in range(1, 9):
-        machine.setSP(machine.getSP() - 1)
-        machine.memory[machine.getSP()] = machine.GR[i]
+        machine.SP -= 1
+        machine.memory[machine.SP] = machine.GR[i]
 
 
 @instruction(0xa1, 'RPOP', noarg)
 def rpop(machine):
     for i in range(1, 9)[::-1]:
-        machine.GR[i] = machine.memory[machine.getSP()]
-        machine.setSP(machine.getSP() + 1)
+        machine.GR[i] = machine.memory[machine.SP]
+        machine.SP += 1
 
 
 class Disassembler(object):
@@ -513,7 +513,7 @@ class InvalidOperation(BaseException):
         return 'Invalid operation is found at #%04x.' % self.address
 
 
-class PyComet2:
+class PyComet2(object):
 
     def __init__(self):
         self.inst_list = [nop, ld2, st, lad, ld1,
@@ -545,7 +545,7 @@ class PyComet2:
         # レジスタ unsigned short
         self.GR = array.array('H', [0] * 9)
         # スタックポインタ SP = GR[8]
-        self.setSP(initSP)
+        self.SP = initSP
         # プログラムレジスタ
         self.PR = 0
         # Overflow Flag
@@ -556,11 +556,13 @@ class PyComet2:
         self.ZF = 1
         logging.info('Initialize memory and registers.')
 
-    def setSP(self, value):
+    def _set_SP(self, value):
         self.GR[8] = value
 
-    def getSP(self):
+    def _get_SP(self):
         return self.GR[8]
+
+    SP = property(_get_SP, _set_SP)
 
     def print_status(self):
         try:
@@ -570,7 +572,7 @@ class PyComet2:
         sys.stderr.write('PR  #%04x [ %-30s ]  STEP %d\n'
                          % (self.PR, code, self.step_count) )
         sys.stderr.write('SP  #%04x(%7d) FR(OF, SF, ZF)  %03s  (%7d)\n'
-                         % (self.getSP(), self.getSP(),
+                         % (self.SP, self.SP,
                             self.getFRasString(), self.getFR()))
         sys.stderr.write('GR0 #%04x(%7d) GR1 #%04x(%7d) '
                          ' GR2 #%04x(%7d) GR3: #%04x(%7d)\n'
@@ -702,13 +704,13 @@ class PyComet2:
         print self.dump_memory(start_addr, 16),
 
     def dump_stack(self):
-        print self.dump_memory(self.getSP(), 16),
+        print self.dump_memory(self.SP, 16),
 
     def dump_to_file(self, filename, lines=0xffff / 8):
         fp = file(filename, 'w')
         fp.write('Step count: %d\n' % self.step_count)
         fp.write('PR: #%04x\n' % self.PR)
-        fp.write('SP: #%04x\n' % self.getSP())
+        fp.write('SP: #%04x\n' % self.SP)
         fp.write('OF: %1d\n' % self.OF)
         fp.write('SF: %1d\n' % self.SF)
         fp.write('ZF: %1d\n' % self.ZF)
