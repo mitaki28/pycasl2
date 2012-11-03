@@ -98,13 +98,14 @@ class Disassembler(object):
 class StatusMonitor:
     def __init__(self, machine):
         self.m = machine
-        self.vars = [self.watcher('%04d: ', 'step_count')]
+        self.vars = []
+        self.watch('%04d: ', 'step_count')
         self.decimalFlag = False
 
     def __str__(self):
         return ' '.join([v() for v in self.vars])
 
-    def watcher(self, fmt, attr, index=None):
+    def watch(self, fmt, attr, index=None):
         def _():
             if index is None:
                 return fmt % getattr(self.m, attr)
@@ -112,42 +113,30 @@ class StatusMonitor:
                 return fmt % getattr(self.m, attr)[index]
         _.__name__ = 'watcher_' + attr
         if index is not None: _.__name__ += '[' + str(index) + ']'
-        return _
+        self.vars.append(_)
 
     def append(self, s):
         try:
-            if s == 'PR':
-                self.vars.append(self.watcher("PR=#%04x", 'PR'))
-            elif s == 'OF':
-                self.vars.append(self.watcher("OF=#%01d", 'OF'))
-            elif s == 'SF':
-                self.vars.append(self.watcher("SF=#%01d", 'SF'))
-            elif s == 'ZF':
-                self.vars.append(self.watcher("ZF=#%01d", 'ZF'))
+            if s == 'PR': self.watch("PR=#%04x", 'PR')
+            elif s == 'OF': self.watch("OF=#%01d", 'OF')
+            elif s == 'SF': self.watch("SF=#%01d", 'SF')
+            elif s == 'ZF': self.watch("ZF=#%01d", 'ZF')
             elif s[0:2] == 'GR':
                 reg = int(s[2])
                 if reg < 0 or 8 < reg:
                     raise
                 if self.decimalFlag:
-                    self.vars.append(
-                        self.watcher(
-                            "GR" + str(reg) + "=#%d", 'GR', reg))
+                    self.watch("GR" + str(reg) + "=#%d", 'GR', reg)
                 else:
-                    self.vars.append(
-                        self.watcher(
-                            "GR" + str(reg) + "=#%04x", 'GR', reg))
+                    self.watch("GR" + str(reg) + "=#%04x", 'GR', reg)
             else:
                 adr = self.m.cast_int(s)
                 if adr < 0 or 0xffff < adr:
                     raise
                 if self.decimalFlag:
-                    self.vars.append(
-                        self.watcher(
-                            "#%04x" % adr + "=%d", 'memory', adr))
+                    self.watch("#%04x" % adr + "=%d", 'memory', adr)
                 else:
-                    self.vars.append(
-                        self.watcher(
-                            "#%04x" % adr + "=%04x", 'memory', adr))
+                    self.watch("#%04x" % adr + "=%04x", 'memory', adr)
         except ValueError:
             print >> sys.stderr, ("Warning: Invalid monitor "
                                   "target is found."
@@ -222,32 +211,6 @@ class PyComet2(object):
 
     SP = property(_get_SP, _set_SP)
 
-    def print_status(self):
-        try:
-            code = self.dis.dis_inst(self.PR)
-        except InvalidOperation:
-            code = '%04x' % self.memory[self.PR]
-        sys.stderr.write('PR  #%04x [ %-30s ]  STEP %d\n'
-                         % (self.PR, code, self.step_count) )
-        sys.stderr.write('SP  #%04x(%7d) FR(OF, SF, ZF)  %03s  (%7d)\n'
-                         % (self.SP, self.SP,
-                            i2bin(self.FR, 3), self.FR))
-        sys.stderr.write('GR0 #%04x(%7d) GR1 #%04x(%7d) '
-                         ' GR2 #%04x(%7d) GR3: #%04x(%7d)\n'
-                         % (self.GR[0], l2a(self.GR[0]),
-                            self.GR[1], l2a(self.GR[1]),
-                            self.GR[2], l2a(self.GR[2]),
-                            self.GR[3], l2a(self.GR[3])))
-        sys.stderr.write('GR4 #%04x(%7d) GR5 #%04x(%7d) '
-                         'GR6 #%04x(%7d) GR7: #%04x(%7d)\n'
-                         % (self.GR[4], l2a(self.GR[4]),
-                            self.GR[5], l2a(self.GR[5]),
-                            self.GR[6], l2a(self.GR[6]),
-                            self.GR[7], l2a(self.GR[7])))
-
-    def exit(self):
-        raise MachineExit(self)
-
     def set_logging_level(self, lv):
         logging.basicConfig(level=lv)
 
@@ -314,6 +277,15 @@ class PyComet2(object):
         if not quiet:
             print >> sys.stderr, 'done.'
 
+    def exit(self):
+        raise MachineExit(self)
+
+    def cast_int(self, addr):
+        if addr[0] == '#':
+            return int(addr[1:], 16)
+        else:
+            return int(addr)
+
     def dump_memory(self, start_addr=0x0000, lines=0xffff / 8):
         printable = (string.letters
                      + string.digits
@@ -365,12 +337,6 @@ class PyComet2(object):
             print >> sys.stderr, ('#%04x\t#%04x\t%s'
                                   % (addr, self.memory[addr], dis))
 
-    def cast_int(self, addr):
-        if addr[0] == '#':
-            return int(addr[1:], 16)
-        else:
-            return int(addr)
-
     def set_break_point(self, addr):
         if addr in self.break_points:
             print >> sys.stderr, '#%04x is already set.' % addr
@@ -396,6 +362,29 @@ class PyComet2(object):
     def jump(self, addr):
         self.PR = addr
         self.print_status()
+
+    def print_status(self):
+        try:
+            code = self.dis.dis_inst(self.PR)
+        except InvalidOperation:
+            code = '%04x' % self.memory[self.PR]
+        sys.stderr.write('PR  #%04x [ %-30s ]  STEP %d\n'
+                         % (self.PR, code, self.step_count) )
+        sys.stderr.write('SP  #%04x(%7d) FR(OF, SF, ZF)  %03s  (%7d)\n'
+                         % (self.SP, self.SP,
+                            i2bin(self.FR, 3), self.FR))
+        sys.stderr.write('GR0 #%04x(%7d) GR1 #%04x(%7d) '
+                         ' GR2 #%04x(%7d) GR3: #%04x(%7d)\n'
+                         % (self.GR[0], l2a(self.GR[0]),
+                            self.GR[1], l2a(self.GR[1]),
+                            self.GR[2], l2a(self.GR[2]),
+                            self.GR[3], l2a(self.GR[3])))
+        sys.stderr.write('GR4 #%04x(%7d) GR5 #%04x(%7d) '
+                         'GR6 #%04x(%7d) GR7: #%04x(%7d)\n'
+                         % (self.GR[4], l2a(self.GR[4]),
+                            self.GR[5], l2a(self.GR[5]),
+                            self.GR[6], l2a(self.GR[6]),
+                            self.GR[7], l2a(self.GR[7])))
 
     def wait_for_command(self):
         while True:
@@ -517,8 +506,9 @@ def main():
             comet2.load(args[0])
             comet2.print_status()
             comet2.wait_for_command()
-    except MachineExit as e:
-        comet2 = e.machine
+    except MachineExit:
+        pass
+    finally:
         if comet2.is_count_step:
             print 'Step count:', comet2.step_count
 
