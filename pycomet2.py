@@ -250,12 +250,7 @@ class PyComet2(object):
             if self.PR in self.break_points:
                 break
             else:
-                try:
-                    self.step()
-                except InvalidOperation, e:
-                    print >> sys.stderr, e
-                    self.dump(e.address)
-                    break
+                self.step()
 
     # オブジェクトコードを主記憶に読み込む
     def load(self, filename, quiet=False):
@@ -389,57 +384,67 @@ class PyComet2(object):
     def wait_for_command(self):
         while True:
             try:
-                line = raw_input('pycomet2> ')
+                line = raw_input('pycomet2> ').strip()
             except EOFError:
                 print
                 break
-            args = line.split()
-            if line[0] == 'q':
-                break
-            elif line[0] == 'b':
-                if 2 <= len(args):
-                    self.set_break_point(self.cast_int(args[1]))
-            elif line[0:2] == 'df':
-                self.dump_to_file(args[1])
-                print >> sys.stderr, 'dump to', filename
-            elif line[0:2] == 'di':
-                if len(args) == 1:
-                    self.disassemble()
-                else:
-                    self.disassemble(self.cast_int(args[1]))
-            elif line[0:2] == 'du':
-                if len(args) == 1:
-                    self.dump()
-                else:
-                    self.dump(self.cast_int(args[1]))
-            elif line[0] == 'd':
-                if 2 <= len(args):
-                    self.delete_break_points(int(args[1]))
-            elif line[0] == 'h':
-                self.print_help()
-            elif line[0] == 'i':
-                self.print_break_points()
-            elif line[0] == 'j':
-                self.jump(self.cast_int(args[1]))
-            elif line[0] == 'm':
-                self.write_memory(self.cast_int(args[1]),
-                                  self.cast_int(args[2]))
-            elif line[0] == 'p':
-                self.print_status()
-            elif line[0] == 'r':
-                self.run()
-            elif line[0:2] == 'st':
-                self.dump_stack()
-            elif line[0] == 's':
-                try:
+            if line == '': continue
+            try:
+                args = line.split()
+                if line[0] == 'q':
+                    break
+                elif line[0] == 'b':
+                    if 2 <= len(args):
+                        self.set_break_point(self.cast_int(args[1]))
+                elif line[0:2] == 'df':
+                    self.dump_to_file(args[1])
+                    print >> sys.stderr, 'dump to', filename
+                elif line[0:2] == 'di':
+                    if len(args) == 1:
+                        self.disassemble()
+                    else:
+                        self.disassemble(self.cast_int(args[1]))
+                elif line[0:2] == 'du':
+                    if len(args) == 1:
+                        self.dump()
+                    else:
+                        self.dump(self.cast_int(args[1]))
+                elif line[0] == 'd':
+                    if 2 <= len(args):
+                        self.delete_break_points(int(args[1]))
+                elif line[0] == 'h':
+                    self.print_help()
+                elif line[0] == 'i':
+                    self.print_break_points()
+                elif line[0] == 'j':
+                    self.jump(self.cast_int(args[1]))
+                elif line[0] == 'm':
+                    self.write_memory(self.cast_int(args[1]),
+                                      self.cast_int(args[2]))
+                elif line[0] == 'p':
+                    self.print_status()
+                elif line[0] == 'r':
+                    self.run()
+                elif line[0:2] == 'st':
+                    self.dump_stack()
+                elif line[0] == 's':
                     self.step()
-                except InvalidOperation as e:
-                    print >> sys.stderr, e
-                    self.dump(e.address)
-
-                self.print_status()
-            else:
-                print >> sys.stderr, 'Invalid command.'
+                    self.print_status()
+                else:
+                    print >> sys.stderr, 'Invalid command', args[0]
+            except ValueError:
+                print >> sys.stderr, "Invalid arguments ", args[1:]
+            except InvalidOperation as e:
+                print >> sys.stderr, e
+                self.dump(e.address)
+                break
+            except MachineExit as e:
+                if self.is_count_step:
+                    print 'Step count:', self.step_count
+                if self.is_auto_dump:
+                    print >> sys.stderr, "dump last status to last_state.txt"
+                    self.dump_to_file('last_state.txt')
+                break
 
     def print_help(self):
         print >> sys.stderr, ('b ADDR        '
@@ -495,26 +500,16 @@ def main():
     comet2 = PyComet2()
     comet2.is_auto_dump = options.dump
     comet2.is_count_step = options.count_step
-    try:
-        if len(options.watchVariables) != 0:
-            comet2.load(args[0], True)
-            comet2.watch(options.watchVariables, options.decimalFlag)
-        elif options.run:
-            comet2.load(args[0], True)
-            comet2.run()
-        else:
-            comet2.load(args[0])
-            comet2.print_status()
-            comet2.wait_for_command()
-    except MachineExit:
-        pass
-    finally:
-        if comet2.is_count_step:
-            print 'Step count:', comet2.step_count
-
-        if comet2.is_auto_dump:
-            print >> sys.stderr, "dump last status to last_state.txt"
-            comet2.dump_to_file('last_state.txt')
+    if len(options.watchVariables) != 0:
+        comet2.load(args[0], True)
+        comet2.watch(options.watchVariables, options.decimalFlag)
+    elif options.run:
+        comet2.load(args[0], True)
+        comet2.run()
+    else:
+        comet2.load(args[0])
+        comet2.print_status()
+        comet2.wait_for_command()
 
 
 if __name__ == '__main__':
