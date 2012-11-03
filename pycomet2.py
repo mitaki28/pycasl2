@@ -162,6 +162,11 @@ class InvalidOperation(BaseException):
         return 'Invalid operation is found at #%04x.' % self.address
 
 
+class MachineExit(BaseException):
+    def __init__(self, machine):
+        self.machine = machine
+
+
 class PyComet2(object):
 
     def __init__(self):
@@ -241,20 +246,7 @@ class PyComet2(object):
                             self.GR[7], l2a(self.GR[7])))
 
     def exit(self):
-        if self.is_count_step:
-            print 'Step count:', self.step_count
-
-        if self.is_auto_dump:
-            print >> sys.stderr, "dump last status to last_state.txt"
-            self.dump_to_file('last_state.txt')
-
-        sys.exit()
-
-    def set_auto_dump(self, flg):
-        self.is_auto_dump = flg
-
-    def set_count_step(self, flg):
-        self.is_count_step = flg
+        raise MachineExit(self)
 
     def set_logging_level(self, lv):
         logging.basicConfig(level=lv)
@@ -512,18 +504,28 @@ def main():
         sys.exit()
 
     comet2 = PyComet2()
-    comet2.set_auto_dump(options.dump)
-    comet2.set_count_step(options.count_step)
-    if len(options.watchVariables) != 0:
-        comet2.load(args[0], True)
-        comet2.watch(options.watchVariables, options.decimalFlag)
-    elif options.run:
-        comet2.load(args[0], True)
-        comet2.run()
-    else:
-        comet2.load(args[0])
-        comet2.print_status()
-        comet2.wait_for_command()
+    comet2.is_auto_dump = options.dump
+    comet2.is_count_step = options.count_step
+    try:
+        if len(options.watchVariables) != 0:
+            comet2.load(args[0], True)
+            comet2.watch(options.watchVariables, options.decimalFlag)
+        elif options.run:
+            comet2.load(args[0], True)
+            comet2.run()
+        else:
+            comet2.load(args[0])
+            comet2.print_status()
+            comet2.wait_for_command()
+    except MachineExit as e:
+        comet2 = e.machine
+        if comet2.is_count_step:
+            print 'Step count:', comet2.step_count
+
+        if comet2.is_auto_dump:
+            print >> sys.stderr, "dump last status to last_state.txt"
+            comet2.dump_to_file('last_state.txt')
+
 
 if __name__ == '__main__':
     import os
