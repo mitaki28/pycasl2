@@ -1,27 +1,4 @@
 # -*- coding: utf-8 -*-
-'''
-PyCOMET2, COMET II emulator implemented in Python.
-Copyright (c) 2012, Yasuaki Mitani
-Copyright (c) 2009, Masahiko Nakamoto.
-
-Based on a simple implementation of COMET II emulator.
-Copyright (c) 2001-2008, Osamu Mizuno.
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-'''
-
 import sys
 import string
 import array
@@ -39,9 +16,6 @@ from instructions import (nop, ld2, st, lad, ld1,
                           jmi, jnz, jze, jump, jpl, jov,
                           push, pop, call, ret, svc,
                           in_, out, rpush, rpop)
-
-# スタックポインタの初期値
-initSP = 0xff00
 
 
 class Disassembler(object):
@@ -158,6 +132,9 @@ class MachineExit(BaseException):
 
 class PyComet2(object):
 
+    # スタックポインタの初期値
+    initSP = 0xff00
+
     def __init__(self):
         self.inst_list = [nop, ld2, st, lad, ld1,
                           adda2, suba2, addl2, subl2,
@@ -188,7 +165,7 @@ class PyComet2(object):
         # レジスタ unsigned short
         self.GR = array.array('H', [0] * 9)
         # スタックポインタ SP = GR[8]
-        self.SP = initSP
+        self.SP = self.initSP
         # プログラムレジスタ
         self.PR = 0
         # Overflow Flag
@@ -489,6 +466,7 @@ def main():
     if options.version:
         print 'PyCOMET2 version 1.2'
         print '$Revision: a31dbeeb4d1c $'
+        print 'Copyright (c) 2012, Yasuaki Mitani.'
         print 'Copyright (c) 2009, Masahiko Nakamoto.'
         print 'All rights reserved.'
         sys.exit()
