@@ -5,9 +5,12 @@ PyCASL2 & PyCOMET2(CASLII Assembler & Simulater)
 概要
 ==============================
 
-PyCASL2, PyCOMET2 は  `CASLII<http://www.ipa.go.jp/english/humandev/data/Term_LangSpec.pdf>`_ の、アセンブラ及びシュミレータです。
+PyCASL2, PyCOMET2 は  `CASLII
+<http://www.ipa.go.jp/english/humandev/data/Term_LangSpec.pdf>`_ 
+の、アセンブラ及びシュミレータです。
 このプログラムは、Masahiko Nakamoto 氏によって作成された、
-`PyCASL2 & PyComet2<http://www.image.med.osaka-u.ac.jp/member/nakamoto/pycasl2/index.html>`_ を、改良して作られています。
+`PyCASL2 & PyComet2
+<http://www.image.med.osaka-u.ac.jp/member/nakamoto/pycasl2/index.html>`_ を、改良して作られています。
 基本的な仕様については、http://www.image.med.osaka-u.ac.jp/member/nakamoto/pycasl2/index.html を参照してください。
 
 変更点
