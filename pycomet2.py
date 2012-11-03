@@ -432,8 +432,8 @@ class PyComet2(object):
                     self.print_status()
                 else:
                     print >> sys.stderr, 'Invalid command', args[0]
-            except ValueError:
-                print >> sys.stderr, "Invalid arguments ", args[1:]
+            except (IndexError, ValueError):
+                print >> sys.stderr, "Invalid arguments", ', '.join(args[1:])
             except InvalidOperation as e:
                 print >> sys.stderr, e
                 self.dump(e.address)
@@ -500,16 +500,26 @@ def main():
     comet2 = PyComet2()
     comet2.is_auto_dump = options.dump
     comet2.is_count_step = options.count_step
-    if len(options.watchVariables) != 0:
-        comet2.load(args[0], True)
-        comet2.watch(options.watchVariables, options.decimalFlag)
-    elif options.run:
-        comet2.load(args[0], True)
-        comet2.run()
-    else:
-        comet2.load(args[0])
-        comet2.print_status()
-        comet2.wait_for_command()
+    try:
+        if len(options.watchVariables) != 0:
+            comet2.load(args[0], True)
+            comet2.watch(options.watchVariables, options.decimalFlag)
+        elif options.run:
+            comet2.load(args[0], True)
+            comet2.run()
+        else:
+            comet2.load(args[0])
+            comet2.print_status()
+            comet2.wait_for_command()
+    except InvalidOperation as e:
+        print >> sys.stderr, e
+        comet2.dump(e.address)
+    except MachineExit as e:
+        if comet2.is_count_step:
+            print 'Step count:', comet2.step_count
+        if comet2.is_auto_dump:
+            print >> sys.stderr, "dump last status to last_state.txt"
+            comet2.dump_to_file('last_state.txt')
 
 
 if __name__ == '__main__':
