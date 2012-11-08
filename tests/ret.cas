@@ -1,0 +1,8 @@
+CASL START MAIN
+PROC ADDA GR1, GR2
+     RET
+MAIN LAD GR1, 1
+     LAD GR2, 1
+     CALL PROC
+     RET
+     END

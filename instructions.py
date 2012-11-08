@@ -4,7 +4,7 @@ import sys
 from functools import wraps
 
 from utils import l2a, a2l, get_bit
-from argtype import noarg, r, r1r2, adrx, radrx, strlen
+from argtypes import noarg, r, r1r2, adrx, radrx, strlen
 
 
 def get_effective_address(m, adr, x):

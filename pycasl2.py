@@ -1,4 +1,4 @@
-# -*- coding: euc-jp -*-
+# -*- coding: utf-8 -*-
 
 '''
 PyCASL2, CASL II assembler implemented in Python.
@@ -122,7 +122,7 @@ def a2l(x):
 
 class CASL2:
 
-    # ¥é¥Ù¥ë¤Î¾ğÊó¤òÊİ»ı¤¹¤ë
+    # ãƒ©ãƒ™ãƒ«ã®æƒ…å ±ã‚’ä¿æŒã™ã‚‹
     class Label:
         def __init__(self, label, lines=0, filename='', addr=0, goto=''):
             self.label = label
@@ -243,14 +243,14 @@ class CASL2:
 ##         for i in self.tmp_code:
 ##             print >> sys.stderr, i
 
-        # ¥é¥Ù¥ë¤ò¥¢¥É¥ì¥¹¤ËÃÖ´¹¡£
+        # ãƒ©ãƒ™ãƒ«ã‚’ã‚¢ãƒ‰ãƒ¬ã‚¹ã«ç½®æ›ã€‚
         try:
             code_list = [self.replace_label(code) for code in self.tmp_code if code != None]
         except self.Error, e:
             e.report()
             sys.exit()
 
-        # =µ­Ë¡¤Î¥ê¥Æ¥é¥ëÍÑ¥³¡¼¥É¤òËöÈø¤Ë²Ã¤¨¤ë¡£
+        # =è¨˜æ³•ã®ãƒªãƒ†ãƒ©ãƒ«ç”¨ã‚³ãƒ¼ãƒ‰ã‚’æœ«å°¾ã«åŠ ãˆã‚‹ã€‚
         code_list.extend(self.additional_dc)
 
 ##         print >> sys.stderr, '-- Second pass --'
@@ -260,40 +260,40 @@ class CASL2:
         return code_list
 
     def is_valid_program(self):
-        ''' ¹½Ê¸²òÀÏ '''
+        ''' æ§‹æ–‡è§£æ '''
         while True:
             if not self.is_START():
                 raise self.Error(self.current_line_number,
                                  self.current_src,
                                  "START is not found.")
             is_data_exist = False
-            while not (self.next_line.op == "END" or self.next_line.op == "EOF"):
+            while True:
+                ln = self.current_line_number
+                src = self.current_src
                 i = self.get_line()
-                if i.op == 'RET':
-                    if is_data_exist:
-                        raise self.Error(self.current_line_number,
-                                         self.current_src,
-                                         "Data definition in program")
-                    is_data_exist = False
                 if i.op == 'START':
-                    raise self.Error(self.current_line_number,
-                                     self.current_src,
-                                     "Invalid operation is found.")
-                if i.op in ('DC', 'DS'):
+                    raise self.Error(ln, src, "START is found before END")
+                elif i.op == 'END':
+                    break
+                elif i.op == 'EOF':
+                    raise self.Error(ln, src, "END is not found.")
+                elif i.op == 'RET':
+                    if is_data_exist:
+                        raise self.Error(ln, src, "Data definition in program")
+                    is_data_exist = False
+                elif i.op in ('DC', 'DS'):
                     is_data_exist = True
+                elif i.op not in op_table:
+                    raise self.Error(ln, src, "Invalid operation is found.")
                 self.tmp_code.append(self.convert(i))
-            if not self.is_END():
-                raise self.Error(self.current_line_number,
-                                 self.current_src,
-                                 "END is not found.")
             if self.next_line.op == "EOF":
                 break
         return True
 
 
     def get_line(self):
-        # °ì¹ÔÀèÆÉ¤ß¤¹¤ë
-        # ¥³¥á¥ó¥È¤Î¤ß¤Î¹Ô¤ÏÆÉ¤ßÈô¤Ğ¤¹
+        # ä¸€è¡Œå…ˆèª­ã¿ã™ã‚‹
+        # ã‚³ãƒ¡ãƒ³ãƒˆã®ã¿ã®è¡Œã¯èª­ã¿é£›ã°ã™
         current = self.next_line
         self.current_src = self.next_src
 
@@ -344,7 +344,7 @@ class CASL2:
         return True
 
     def is_DC_or_DS(self):
-        # DC, DS°Ê³°¤Ï¥¨¥é¡¼
+        # DC, DSä»¥å¤–ã¯ã‚¨ãƒ©ãƒ¼
         i = self.get_line()
         if not (i.op == "DC" or i.op == "DS"):
             return False
@@ -354,7 +354,7 @@ class CASL2:
         return True
 
     def is_valid_instruction(self):
-        # DC, DS, END, START¤Ï¥¨¥é¡¼
+        # DC, DS, END, STARTã¯ã‚¨ãƒ©ãƒ¼
         i = self.get_line()
         if (i.op == "DC" or i.op == "DS" or i.op == "END" or i.op == "START"):
             return False
@@ -364,7 +364,7 @@ class CASL2:
         return True
 
     def replace_label(self, bcode):
-        ''' ¥é¥Ù¥ë¤ò¥¢¥É¥ì¥¹¤ËÃÖ´¹ '''
+        ''' ãƒ©ãƒ™ãƒ«ã‚’ã‚¢ãƒ‰ãƒ¬ã‚¹ã«ç½®æ› '''
         def conv(x, bcode):
             if type(x) == type('str'):
                 if x[0] == '=':
@@ -374,11 +374,11 @@ class CASL2:
                 if x in self.symbols.keys():
                     return self.symbols[x].addr
                 #
-                # ¥¹¥³¡¼¥×Æâ¤Ë¤Ê¤¤¤È¤­¤Ï¡¢¥¹¥³¡¼¥×Ì¾¤Ê¤·¤Î¥é¥Ù¥ë¤òÃµ¤¹
+                # ã‚¹ã‚³ãƒ¼ãƒ—å†…ã«ãªã„ã¨ãã¯ã€ã‚¹ã‚³ãƒ¼ãƒ—åãªã—ã®ãƒ©ãƒ™ãƒ«ã‚’æ¢ã™
                 elif global_name in self.symbols.keys():
                     if self.symbols[global_name].goto is '':
                         return self.symbols[global_name].addr
-                    # ¥µ¥Ö¥ë¡¼¥Á¥ó¤Î¼Â¹Ô³«»ÏÈÖÃÏ¤¬»ØÄê¤µ¤ì¤Æ¤¤¤¿¾ì¹ç¡¢goto¤Ë½ñ¤«¤ì¤Æ¤¤¤ë¥é¥Ù¥ë¤ÎÈÖÃÏ¤Ë¤¹¤ë
+                    # ã‚µãƒ–ãƒ«ãƒ¼ãƒãƒ³ã®å®Ÿè¡Œé–‹å§‹ç•ªåœ°ãŒæŒ‡å®šã•ã‚Œã¦ã„ãŸå ´åˆã€gotoã«æ›¸ã‹ã‚Œã¦ã„ã‚‹ãƒ©ãƒ™ãƒ«ã®ç•ªåœ°ã«ã™ã‚‹
                     else:
                         label = self.symbols[global_name].goto
                         if label in self.symbols.keys():
@@ -399,7 +399,7 @@ class CASL2:
 
 
     def split_line(self, line, line_number):
-        ''' ¹Ô¤«¤é¥é¥Ù¥ë¡¢Ì¿Îá¡¢¥ª¥Ú¥é¥ó¥É¤ò¼è¤ê½Ğ¤¹ '''
+        ''' è¡Œã‹ã‚‰ãƒ©ãƒ™ãƒ«ã€å‘½ä»¤ã€ã‚ªãƒšãƒ©ãƒ³ãƒ‰ã‚’å–ã‚Šå‡ºã™ '''
         result = re.match('^\s*$', line)
         # check empty line
         if result != None:
@@ -435,7 +435,7 @@ class CASL2:
         return self.Instruction(label, op, args, line_number, line)
 
     def register_label(self, inst):
-        ''' ¥é¥Ù¥ë¤ò¥·¥ó¥Ü¥ë¥Æ¡¼¥Ö¥ë¤ËÅĞÏ¿¤¹¤ë '''
+        ''' ãƒ©ãƒ™ãƒ«ã‚’ã‚·ãƒ³ãƒœãƒ«ãƒ†ãƒ¼ãƒ–ãƒ«ã«ç™»éŒ²ã™ã‚‹ '''
         if inst.label != None:
             label_name = self.current_scope + '.' + inst.label
             if label_name in self.symbols.keys():
@@ -518,7 +518,7 @@ class CASL2:
         code = array.array('H', const)
         return code
 
-    # IN,OUTÍÑ
+    # IN,OUTç”¨
     def gen_code_strlen(self, op, args):
         code = [0, None, None]
         code[0] = (op_table[op][0] << 8)
@@ -526,7 +526,7 @@ class CASL2:
         code[2] = self.conv_adr(args[1])
         return code
 
-    # STARTÍÑ
+    # STARTç”¨
     def gen_code_start(self, op, args):
         code = [0]*8
         code[0] = (ord('C') << 8) + ord('A')
@@ -545,13 +545,13 @@ class CASL2:
             value = [a2l(int(arg))]
         return value
 
-    # ¥é¥Ù¥ë¤ÎÊ¸»úÎó¤òÀ¸À®¤¹¤ë
+    # ãƒ©ãƒ™ãƒ«ã®æ–‡å­—åˆ—ã‚’ç”Ÿæˆã™ã‚‹
     def gen_label(self):
         l = '_L' + '%04d' % self.label_count
         self.label_count += 1
         return l
 
-    # =µ­Ë¡¤Î¥ê¥Æ¥é¥ëÍÑ¥³¡¼¥É¤òÀ¸À®¤¹¤ë
+    # =è¨˜æ³•ã®ãƒªãƒ†ãƒ©ãƒ«ç”¨ã‚³ãƒ¼ãƒ‰ã‚’ç”Ÿæˆã™ã‚‹
     def gen_additional_dc(self, x, n):
         l = self.gen_label()
         label_name = '.' + l
@@ -564,7 +564,7 @@ class CASL2:
         return self.symbols[label_name].addr
 
 
-    # ¥Ğ¥¤¥ÈÎó¤ËÊÑ´¹
+    # ãƒã‚¤ãƒˆåˆ—ã«å¤‰æ›
     def convert(self, inst):
         self.register_label(inst)
 
@@ -584,7 +584,7 @@ class CASL2:
                     sys.exit()
                 self.current_scope = inst.label
                 if self.start_found:
-                    # ¥µ¥Ö¥ë¡¼¥Á¥ó¤Î¼Â¹Ô³«»ÏÈÖÃÏ¤¬»ØÄê¤µ¤ì¤Æ¤¤¤¿¾ì¹ç¡¢goto¤Ë¼Â¹Ô³«»ÏÈÖÃÏ¤ò¥»¥Ã¥È¤¹¤ë
+                    # ã‚µãƒ–ãƒ«ãƒ¼ãƒãƒ³ã®å®Ÿè¡Œé–‹å§‹ç•ªåœ°ãŒæŒ‡å®šã•ã‚Œã¦ã„ãŸå ´åˆã€gotoã«å®Ÿè¡Œé–‹å§‹ç•ªåœ°ã‚’ã‚»ãƒƒãƒˆã™ã‚‹
                     if inst.args != None:
                         self.symbols['.'+inst.label].goto = self.conv_adr(inst.args[0])
                     return None
