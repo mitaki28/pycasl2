@@ -263,31 +263,31 @@ class CASL2:
         ''' πΩ ∏≤Ú¿œ '''
         while True:
             if not self.is_START():
-                raise self.Error(self.current_line_number, self.current_src, "START is not found.")
-            #
-
-            while not (self.next_line.op == "RET" or self.next_line.op == "EOF"):
-                if not self.is_valid_instruction():
-                    raise self.Error(self.current_line_number, self.current_src, "Invalid operation is found.")
-                #
-            #
-
-            if not self.is_RET():
-                raise self.Error(self.current_line_number, self.current_src, "RET is not found.")
-
+                raise self.Error(self.current_line_number,
+                                 self.current_src,
+                                 "START is not found.")
+            is_data_exist = False
             while not (self.next_line.op == "END" or self.next_line.op == "EOF"):
-                if not self.is_DC_or_DS():
-                    raise self.Error(self.current_line_number, self.current_src, "Invalid operation is found.")
-                #
-            #
+                i = self.get_line()
+                if i.op == 'RET':
+                    if is_data_exist:
+                        raise self.Error(self.current_line_number,
+                                         self.current_src,
+                                         "Data definition in program")
+                    is_data_exist = False
+                if i.op == 'START':
+                    raise self.Error(self.current_line_number,
+                                     self.current_src,
+                                     "Invalid operation is found.")
+                if i.op in ('DC', 'DS'):
+                    is_data_exist = True
+                self.tmp_code.append(self.convert(i))
             if not self.is_END():
-                raise self.Error(self.current_line_number, self.current_src, "END is not found.")
-            #
-
+                raise self.Error(self.current_line_number,
+                                 self.current_src,
+                                 "END is not found.")
             if self.next_line.op == "EOF":
                 break
-            #
-        #
         return True
 
 
